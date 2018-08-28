@@ -3,8 +3,8 @@
 # вычисляет новые добавленные в базу паспорта                       #
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
-# Автор: Годлин Артем                                               #
-# Версия: v0.2                                                      #
+# Автор: Гончаренко Дмитрий                                         #
+# Версия: v0.3                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -15,7 +15,20 @@ import requests  # pip3 install request
 import bz2
 import os
 
+
+# ------------------------------ Динамические переменные ------------------------------ # 
+
+# Ссылка на реестр недействительных паспортов с сайта МВД
 fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports.csv.bz2'
+# Флаг запуска. Поставить 1 при первичном запуске. Скачивание + парсинг. Без дельты.
+pure_start = 0
+# Вид бэкап файлов. Сейчас: list_of_expired_passports_date.csv
+# Выполнить pure_start = 1 после изменения. 
+postfix = '_' + datetime.today().strftime('%Y%m%d') # _date
+# Размер блока чтения (в строках). Больше значение - Больше расход RAM
+blocksize = 15 * 10 ** 6 
+
+# ------------------------------------------------------------------------------------- #
 
 
 # Проверяет состоит ли строка только из цифр
@@ -48,7 +61,7 @@ def downloadFile(url):
 # Разархивирование bz2
 def decompressFile(filename):
     print('Extracting:', filename)
-    with open(filename[:-4], 'wb') as csvfile, open(filename, "rb") as zipfile:
+    with open(filename[:-4], 'wb') as csvfile, open(filename, 'rb') as zipfile:
         z = bz2.BZ2Decompressor()
         for block in iter(lambda: zipfile.read(200 * 1024), b''):
             csvfile.write(z.decompress(block))
@@ -59,8 +72,9 @@ def decompressFile(filename):
 # Удаление всех данных кроме вида: 1234,123456 (считаются ошибочными)
 def parseCSV(filename):
     print('Parsing:', filename)
-    with open(filename, 'r', newline='', encoding='utf8') as csvIN, open('parsed_' + filename, 'w',
-                                                                         newline='') as csvOUT:
+    pfilename = filename[:-4] + postfix + '.csv'
+    with open(filename, 'r', newline='', encoding='utf8') as csvIN, \
+        open(pfilename, 'w', newline='') as csvOUT:
         readCSV = csv.reader(csvIN, delimiter=',')
         writeCSV = csv.writer(csvOUT, delimiter=',')
         writeCSV.writerow(next(readCSV))
@@ -70,17 +84,25 @@ def parseCSV(filename):
                 writeCSV.writerow({line[0]+line[1]})
                 num += 1
         print('Parsed', num, 'passports!')
-        return num
+        print('File:', pfilename)
+        return num, pfilename
+    print('Parser ended!')    
 
-
+# Поиск в директории ./backup самого последнего файла по postfix дате
+def getBackFile(filename):
+    f = []
+    for root, dirs, files in os.walk('./backup'):  
+        f.extend(files)
+        break
+    
 # Вычисление дельты
-# file1 - предыдущая версия
-# file2 - новая версия
+# fileOld - предыдущая версия
+# fileNew - новая версия
 # N - количество людей в новой базе
-# blocksize - размер блока чтения. Больше значение - Больше расход RAM
-def calcDelta(file1, file2, N, blocksize):
-    print('Comparing:', file1, file2)
-    with open(file2, 'r', newline='', encoding='utf8') as csvNEW, open('delta_' + datetime.today().strftime("%Y%m%d") + '.csv', 'w', newline='') as csvDELTA:
+def calcDelta(fileOld, fileNew, N):
+    print('Comparing:', fileOld, fileNew)
+    with open(fileNew, 'r', newline='', encoding='utf8') as csvNEW, \
+        open('delta_' + datetime.today().strftime('%Y%m%d') + '.csv', 'w', newline='') as csvDELTA:
         readNEW = csv.reader(csvNEW, delimiter=',')
         writeDelta = csv.writer(csvDELTA, delimiter=',')
         writeDelta.writerow(next(readNEW))
@@ -94,7 +116,7 @@ def calcDelta(file1, file2, N, blocksize):
             for k, line in enumerate(readNEW):
                 setNew.add(int(line[0]))
                 if k == part-1: break
-            with open(file1, 'r', newline='', encoding='utf8') as csvOLD:
+            with open(fileOld, 'r', newline='', encoding='utf8') as csvOLD:
                 readOLD = csv.reader(csvOLD, delimiter=',')
                 next(readOLD)
                 for k, line in enumerate(readOLD):
@@ -118,22 +140,28 @@ def calcDelta(file1, file2, N, blocksize):
 def main():
     print('Starts passports parser!')
     t0 = time.time()
-
+    # При первичном запуске создать папку backup
+    if pure_start:
+        if not os.path.isdir('./backup'):
+            os.mkdir('./backup/')
+    
     # Скачиваем реестр недействительных паспортов
     compressfile = downloadFile(fms_url)
     # Распаковываем архив в текущую директорию
     file = decompressFile(compressfile)
-    # file = 'list_of_expired_passports.csv'
-    os.rename('parsed_'+file, 'parsed_'+file + datetime.today().strftime("%Y%m%d"))
     # Подчищаем файл от битых данных
-    num_passports = parseCSV(file)
-    print('Parser ended!')
-    # Сравнение старой и новой версии баз, выделение дельты (инкрементальной, но можно и любой другой)
-    # Пока сравнивается один и тот же файл, дописать тут выбор файла
-    calcDelta('parsed_'+file, 'parsed_'+file + datetime.today().strftime("%Y%m%d"), num_passports, 15 * 10 ** 6)
-    os.rename('parsed_'+file + datetime.today().strftime("%Y%m%d"), 'backup/parsed_'+file + datetime.today().strftime("%Y%m%d"))
-    t1 = time.time()
+    num_passports, parsed_file = parseCSV(file)
+    # Если запуск первый, то сохранить только бэкап
+    if not pure_start:
+        # Получение имени предыдущей версии реестра для вычисления дельты
+        back_file = getBackFile(file)
+        # Сравнение старой и новой версии баз, выделение дельты (инкрементальной, но можно и любой другой)
+        calcDelta(back_file, parsed_file, num_passports)
+    # Переименовываем файл
+    os.rename(parsed_file, 'backup/parsed_file')
 
+    t1 = time.time()
+    print('Parser ended!')
     print('Time: ', '{:g}'.format((t1 - t0) // 60), 'm ', '{:.0f}'.format((t1 - t0) % 60), 's', sep='')
 
 
