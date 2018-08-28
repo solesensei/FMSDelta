@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v0.4                                                      #
+# Версия: v0.5                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -99,7 +99,8 @@ def getBackFile(filename):
     if len(f) == 0:
         print('No backup files! Abort.')
         exit()
-    last = 0
+    last = 0 # последний бэкап
+    first = 0 # первый бэкап
     for file in f:
         print(file)
         if not isInteger(file[1-n:-4]):
@@ -107,8 +108,12 @@ def getBackFile(filename):
             exit()
         if last < int(file[1-n:-4]):
             last = int(file[1-n:-4])
+            first = last if first == 0 else first
+        if first > int(file[1-n:-4]):
+            first = int(file[1-n:-4])
+    print('Got first backup:', first)
     print('Got last backup:', last)
-    return filename[:-4] + '_' + str(last) + '.csv'
+    return (filename[:-4] + '_' + str(first) + '.csv'), (filename[:-4] + '_' + str(last) + '.csv')
 
 
 # Вычисление дельты (быстрая версия, 1 прогон) ~ 5 мин
@@ -117,7 +122,7 @@ def getBackFile(filename):
 # N - количество людей в новой базе
 def calcDeltaFast(fileOld, fileNew, N):
     print('Comparing:', fileOld, fileNew)
-    with open(fileOld, 'r') as fold:
+    with open('./backup/' + fileOld, 'r') as fold:
         print('Counting passports in', fileOld)
         O = sum(1 for i in fold)
         O -= 1
@@ -127,7 +132,7 @@ def calcDeltaFast(fileOld, fileNew, N):
     print('Calculating delta')
     stackMinus = set()
     stackPlus = set()
-    with open(fileNew, 'r') as csvNEW, open(fileOld, 'r') as csvOLD, \
+    with open(fileNew, 'r') as csvNEW, open('./backup/' + fileOld, 'r') as csvOLD, \
         open('deltaPlus' + postfix, 'w') as deltaPlus, open('deltaMinus' + postfix, 'w') as deltaMinus:
         for lineO, lineN in zip(csvOLD, csvNEW):
             k -= 1
@@ -159,14 +164,14 @@ def calcDeltaFast(fileOld, fileNew, N):
     print('Compared!')
 
 
-# Вычисление дельты (универсальная версия, если дельта > 1гб) ~ 40 мин
+# Вычисление инкрементальной дельты (универсальная версия, если дельта > 1гб) ~ 40 мин
 # fileOld - предыдущая версия
 # fileNew - новая версия
 # N - количество людей в новой базе
 def calcDeltaStable(fileOld, fileNew, N):
     print('Comparing:', fileOld, fileNew)
     with open(fileNew, 'r', newline='') as csvNEW, \
-        open('delta_' + postfix, 'w', newline='') as csvDELTA:
+        open('deltaPlus' + postfix, 'w', newline='') as csvDELTA:
         readNEW = csv.reader(csvNEW, delimiter=',')
         writeDelta = csv.writer(csvDELTA, delimiter=',')
         writeDelta.writerow(next(readNEW))
@@ -180,7 +185,7 @@ def calcDeltaStable(fileOld, fileNew, N):
             for k, line in enumerate(readNEW):
                 setNew.add(line[0]+line[1])
                 if k == part-1: break
-            with open(fileOld, 'r', newline='') as csvOLD:
+            with open('./backup/' + fileOld, 'r', newline='') as csvOLD:
                 readOLD = csv.reader(csvOLD, delimiter=',')
                 next(readOLD)
                 for k, line in enumerate(readOLD):
@@ -209,7 +214,7 @@ def init():
             os.mkdir('./delta')
 
 # Функция завершения. Перенос файлов и очистка директории
-def postprocessing(file, parsed_file, compressfile):
+def postprocessing(file, parsed_file, compressfile, first_backup):
     # Переносим файл в бэкап и дельту с заменой
     if os.path.exists('./backup/' + parsed_file):
         os.remove('./backup/' + parsed_file)
@@ -220,9 +225,16 @@ def postprocessing(file, parsed_file, compressfile):
     os.rename(parsed_file, './backup/' + parsed_file)
     os.rename('deltaPlus' + postfix, './delta/deltaPlus' + postfix)
     os.rename('deltaMinus' + postfix, './delta/deltaMinus' + postfix)
+    # Удаляем самый старый бэкап, если > 3
+    f = []
+    for root, dirs, files in os.walk('./backup'):  
+        f.extend(files)
+        break
+    if len(f) > 3 and os.path.exists('./backup/' + first_backup):
+        os.remove('./backup/' + first_backup)
     # Очистка work directory
-    # os.remove(compressfile)
-    # os.remove(file)
+    os.remove(compressfile)
+    os.remove(file)
 
 
 def main():
@@ -242,11 +254,11 @@ def main():
     # Если запуск первый, то сохранить только бэкап
     if not pure_start:
         # Получение имени предыдущей версии реестра для вычисления дельты
-        back_file = getBackFile(file)
+        first_backup, backup_file = getBackFile(file)
         # Сравнение старой и новой версии баз, выделение дельты (инкрементальной, но можно и любой другой)
-        calcDeltaFast(back_file, parsed_file, num_passports)
+        calcDeltaFast(backup_file, parsed_file, num_passports)
     
-    postprocessing(file, parsed_file, compressfile)
+    postprocessing(file, parsed_file, compressfile, firstbackup)
 
     t1 = time.time()
     print('Parser ended!')
