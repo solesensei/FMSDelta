@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v0.5                                                      #
+# Версия: v0.6                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -74,19 +74,27 @@ def parseCSV(filename):
     print('Parsing:', filename)
     pfilename = filename[:-4] + postfix
     with open(filename, 'r', newline='', encoding='utf8') as csvIN, \
-        open(pfilename, 'w', newline='') as csvOUT:
+        open(pfilename, 'w', newline='') as csvOUT, \
+        open('brokenData.csv', 'w', newline='') as csvBroke:
         readCSV = csv.reader(csvIN, delimiter=',')
         writeCSV = csv.writer(csvOUT, delimiter=',')
+        brokeCSV = csv.writer(csvBroke, delimiter=',')
         writeCSV.writerow(next(readCSV))
         num = 0
         for line in readCSV:
             if len(line[0]) == 4 and len(line[1]) == 6 and isInteger(line[0]+line[1]):
                 writeCSV.writerow({line[0]+line[1]})
                 num += 1
+                if num % 10**5 == 0:
+                    print('Passports:', num, end='\r')
+            else:
+                brokeCSV.writerow({line[0]+line[1]})
         print('Parsed', num, 'passports!')
         print('File:', pfilename)
+        print('Broken Data: brokenData.csv')
         return num, pfilename
     print('Parser ended!')    
+
 
 # Поиск в директории ./backup самого последнего файла по postfix дате
 def getBackFile(filename):
@@ -205,6 +213,7 @@ def calcDeltaStable(fileOld, fileNew, N):
             setNew.clear()
     print('Compared!')
 
+
 # Функция инициализации. При первичной настройке
 def init():
     # При первичном запуске создать папку backup и delta
@@ -213,9 +222,10 @@ def init():
     if not os.path.isdir('./delta'):
             os.mkdir('./delta')
 
+
 # Функция завершения. Перенос файлов и очистка директории
 def postprocessing(file, parsed_file, compressfile, first_backup):
-    # Переносим файл в бэкап и дельту с заменой
+    # Переносим файлы в бэкап и дельту с заменой
     if os.path.exists('./backup/' + parsed_file):
         os.remove('./backup/' + parsed_file)
     if os.path.exists('./delta/deltaPlus' + postfix):
@@ -223,8 +233,10 @@ def postprocessing(file, parsed_file, compressfile, first_backup):
     if os.path.exists('./delta/deltaMinus' + postfix):
         os.remove('./delta/deltaMinus' + postfix)
     os.rename(parsed_file, './backup/' + parsed_file)
-    os.rename('deltaPlus' + postfix, './delta/deltaPlus' + postfix)
-    os.rename('deltaMinus' + postfix, './delta/deltaMinus' + postfix)
+    if os.path.exists('deltaPlus' + postfix):
+        os.rename('deltaPlus' + postfix, './delta/deltaPlus' + postfix)
+    if os.path.exists('deltaMinus' + postfix):
+        os.rename('deltaMinus' + postfix, './delta/deltaMinus' + postfix)
     # Удаляем самый старый бэкап, если > 3
     f = []
     for root, dirs, files in os.walk('./backup'):  
@@ -258,7 +270,7 @@ def main():
         # Сравнение старой и новой версии баз, выделение дельты (инкрементальной, но можно и любой другой)
         calcDeltaFast(backup_file, parsed_file, num_passports)
     
-    postprocessing(file, parsed_file, compressfile, firstbackup)
+    postprocessing(file, parsed_file, compressfile, first_backup)
 
     t1 = time.time()
     print('Parser ended!')
