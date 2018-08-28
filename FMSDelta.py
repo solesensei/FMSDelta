@@ -1,10 +1,10 @@
 # ----------------------------------------------------------------- #
 # Скрипт скачивает реестр недействительных паспортов с ФМС МВД и    #
-# вычисляет новые добавленные в базу паспорта                       #
+# вычисляет новые добавленные и удаленные паспорта                  #
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v0.3                                                      #
+# Версия: v0.4                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -22,10 +22,10 @@ import os
 fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports.csv.bz2'
 # Флаг запуска. Поставить 1 при первичном запуске. Скачивание + парсинг. Без дельты.
 pure_start = 0
-# Вид бэкап файлов. Сейчас: list_of_expired_passports_date.csv
-# Выполнить pure_start = 1 после изменения. 
-postfix = '_' + datetime.today().strftime('%Y%m%d') # _date
-# Размер блока чтения (в строках). Больше значение - Больше расход RAM
+# Вид бэкап файлов. Сейчас: list_of_expired_passports_date.csv, delta_date.csv
+# Выполнить pure_start = 1 после изменения. Менять только 'date'
+postfix = '_' + datetime.today().strftime('%Y%m%d') + '.csv' # _date.csv
+# Размер блока чтения (в строках). Больше значение - Больше расход RAM (для calcDeltaStable)
 blocksize = 15 * 10 ** 6 
 
 # ------------------------------------------------------------------------------------- #
@@ -72,7 +72,7 @@ def decompressFile(filename):
 # Удаление всех данных кроме вида: 1234,123456 (считаются ошибочными)
 def parseCSV(filename):
     print('Parsing:', filename)
-    pfilename = filename[:-4] + postfix + '.csv'
+    pfilename = filename[:-4] + postfix
     with open(filename, 'r', newline='', encoding='utf8') as csvIN, \
         open(pfilename, 'w', newline='') as csvOUT:
         readCSV = csv.reader(csvIN, delimiter=',')
@@ -90,19 +90,83 @@ def parseCSV(filename):
 
 # Поиск в директории ./backup самого последнего файла по postfix дате
 def getBackFile(filename):
+    print('Getting backup file to compare')
+    n = len(postfix)
     f = []
     for root, dirs, files in os.walk('./backup'):  
         f.extend(files)
         break
-    
-# Вычисление дельты
+    if len(f) == 0:
+        print('No backup files! Abort.')
+        exit()
+    last = 0
+    for file in f:
+        print(file)
+        if not isInteger(file[1-n:-4]):
+            print('Postfix error: not a number! Abort.', file[1-n:-4])
+            exit()
+        if last < int(file[1-n:-4]):
+            last = int(file[1-n:-4])
+    print('Got last backup:', last)
+    return filename[:-4] + '_' + str(last) + '.csv'
+
+
+# Вычисление дельты (быстрая версия, 1 прогон) ~ 5 мин
 # fileOld - предыдущая версия
 # fileNew - новая версия
 # N - количество людей в новой базе
-def calcDelta(fileOld, fileNew, N):
+def calcDeltaFast(fileOld, fileNew, N):
     print('Comparing:', fileOld, fileNew)
-    with open(fileNew, 'r', newline='', encoding='utf8') as csvNEW, \
-        open('delta_' + datetime.today().strftime('%Y%m%d') + '.csv', 'w', newline='') as csvDELTA:
+    with open(fileOld, 'r') as fold:
+        print('Counting passports in', fileOld)
+        O = sum(1 for i in fold)
+        O -= 1
+    print('Counted!')
+    k = N if N < O else O
+    # Вычисление
+    print('Calculating delta')
+    stackMinus = set()
+    stackPlus = set()
+    with open(fileNew, 'r') as csvNEW, open(fileOld, 'r') as csvOLD, \
+        open('deltaPlus' + postfix, 'w') as deltaPlus, open('deltaMinus' + postfix, 'w') as deltaMinus:
+        for lineO, lineN in zip(csvOLD, csvNEW):
+            k -= 1
+            if k % 100000 == 0:
+                print(k, end='\r')
+            if lineO != lineN:
+                stackMinus.add(lineO)
+                stackPlus.add(lineN)
+            if k % (2 * 10 ** 6) == 0:
+                tmp_ = stackMinus.difference(stackPlus)
+                stackPlus.difference_update(stackMinus)
+                stackMinus = tmp_.copy()
+                tmp_.clear()
+        for i in range(0, abs(N - O)):
+            if N > O:
+                stackPlus.add(csvNEW.readline())
+            else:
+                stackMinus.add(csvOLD.readline())
+        tmp_ = stackMinus.difference(stackPlus)
+        stackPlus.difference_update(stackMinus)
+        stackMinus = tmp_.copy()
+        tmp_.clear()
+
+        print('Calculated! Writing delta to files.')
+        for element in stackPlus:
+            print(element, end='', file=deltaPlus)
+        for element in stackMinus:
+            print(element, end='', file=deltaMinus)
+    print('Compared!')
+
+
+# Вычисление дельты (универсальная версия, если дельта > 1гб) ~ 40 мин
+# fileOld - предыдущая версия
+# fileNew - новая версия
+# N - количество людей в новой базе
+def calcDeltaStable(fileOld, fileNew, N):
+    print('Comparing:', fileOld, fileNew)
+    with open(fileNew, 'r', newline='') as csvNEW, \
+        open('delta_' + postfix, 'w', newline='') as csvDELTA:
         readNEW = csv.reader(csvNEW, delimiter=',')
         writeDelta = csv.writer(csvDELTA, delimiter=',')
         writeDelta.writerow(next(readNEW))
@@ -114,13 +178,13 @@ def calcDelta(fileOld, fileNew, N):
         for i in range(0, parts):
             print('Part:', i+1)
             for k, line in enumerate(readNEW):
-                setNew.add(int(line[0]))
+                setNew.add(line[0]+line[1])
                 if k == part-1: break
-            with open(fileOld, 'r', newline='', encoding='utf8') as csvOLD:
+            with open(fileOld, 'r', newline='') as csvOLD:
                 readOLD = csv.reader(csvOLD, delimiter=',')
                 next(readOLD)
                 for k, line in enumerate(readOLD):
-                    setOld.add(int(line[0]))
+                    setOld.add(line[0]+line[1])
                     if k % part == 0 and k > 0:
                         setNew.difference_update(setOld)
                         setOld.clear()
@@ -130,21 +194,45 @@ def calcDelta(fileOld, fileNew, N):
                     setNew.difference_update(setOld) # проверяем оставшиеся записи
                     print('Checked:', k)
             for line in setNew:
-                print('{:010d}'.format(line), file=csvDELTA)
+                print(line, end='', file=csvDELTA)
             print(len(setNew))
             setOld.clear()
             setNew.clear()
-    print('Finished!')
+    print('Compared!')
+
+# Функция инициализации. При первичной настройке
+def init():
+    # При первичном запуске создать папку backup и delta
+    if not os.path.isdir('./backup'):
+            os.mkdir('./backup')
+    if not os.path.isdir('./delta'):
+            os.mkdir('./delta')
+
+# Функция завершения. Перенос файлов и очистка директории
+def postprocessing(file, parsed_file, compressfile):
+    # Переносим файл в бэкап и дельту с заменой
+    if os.path.exists('./backup/' + parsed_file):
+        os.remove('./backup/' + parsed_file)
+    if os.path.exists('./delta/deltaPlus' + postfix):
+        os.remove('./delta/deltaPlus' + postfix)
+    if os.path.exists('./delta/deltaMinus' + postfix):
+        os.remove('./delta/deltaMinus' + postfix)
+    os.rename(parsed_file, './backup/' + parsed_file)
+    os.rename('deltaPlus' + postfix, './delta/deltaPlus' + postfix)
+    os.rename('deltaMinus' + postfix, './delta/deltaMinus' + postfix)
+    # Очистка work directory
+    # os.remove(compressfile)
+    # os.remove(file)
 
 
 def main():
     print('Starts passports parser!')
     t0 = time.time()
-    # При первичном запуске создать папку backup
+
+    # Если запуск первичный
     if pure_start:
-        if not os.path.isdir('./backup'):
-            os.mkdir('./backup/')
-    
+        init()
+
     # Скачиваем реестр недействительных паспортов
     compressfile = downloadFile(fms_url)
     # Распаковываем архив в текущую директорию
@@ -156,9 +244,9 @@ def main():
         # Получение имени предыдущей версии реестра для вычисления дельты
         back_file = getBackFile(file)
         # Сравнение старой и новой версии баз, выделение дельты (инкрементальной, но можно и любой другой)
-        calcDelta(back_file, parsed_file, num_passports)
-    # Переименовываем файл
-    os.rename(parsed_file, 'backup/parsed_file')
+        calcDeltaFast(back_file, parsed_file, num_passports)
+    
+    postprocessing(file, parsed_file, compressfile)
 
     t1 = time.time()
     print('Parser ended!')
