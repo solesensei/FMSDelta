@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v0.7                                                      #
+# Версия: v0.8                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -21,10 +21,10 @@ import os
 # Ссылка на реестр недействительных паспортов с сайта МВД
 fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports.csv.bz2'
 # Флаг запуска. Поставить 1 при первичном запуске. Скачивание + парсинг. Без дельты.
-pure_start = 1
-# Вид бэкап файлов. Сейчас: list_of_expired_passports_date.csv, delta_date.csv
+pure_start = 0
+# Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 # Выполнить pure_start = 1 после изменения. Менять только 'date'
-postfix = '_' + datetime.today().strftime('%Y%m%d') + '.csv' # _date.csv
+postfix = '_' + datetime.today().strftime('%Y%m%d') + '.txt' # _date.txt
 # Размер блока чтения (в строках). Больше значение - Больше расход RAM (для calcDeltaStable)
 blocksize = 15 * 10 ** 6 
 
@@ -89,7 +89,7 @@ def parseCSV(filename='list_of_expired_passports.csv'):
                 txtBroke.write(a + ',' + b)
         print('Parsed', num, 'passports!')
         print('File:', pfilename)
-        print('Broken Data: brokenData.csv')
+        print('Broken Data: brokenData.txt')
         return num, pfilename
     print('Parser ended!')    
 
@@ -119,7 +119,7 @@ def getBackFile(filename='list_of_expired_passports.csv'):
             first = int(file[1-n:-4])
     print('Got first backup:', first)
     print('Got last backup:', last)
-    return (filename[:-4] + '_' + str(first) + '.csv'), (filename[:-4] + '_' + str(last) + '.csv')
+    return (filename[:-4] + '_' + str(first) + '.txt'), (filename[:-4] + '_' + str(last) + '.txt')
 
 
 # Вычисление дельты (быстрая версия, 1 прогон) ~ 5 мин
@@ -243,8 +243,8 @@ def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.cs
     if len(f) > 3 and os.path.exists('./backup/' + first_backup):
         os.remove('./backup/' + first_backup)
     # Очистка work directory
-    # os.remove(compressfile)
-    # os.remove(file)
+    os.remove(compressfile)
+    os.remove(file)
 
 
 def main():
@@ -256,19 +256,19 @@ def main():
         init()
 
     # Скачиваем реестр недействительных паспортов
-    # compressfile = downloadFile(fms_url)
+    compressfile = downloadFile(fms_url)
     # Распаковываем архив в текущую директорию
-    # file = decompressFile(compressfile)
+    file = decompressFile(compressfile)
     # Подчищаем файл от битых данных
-    num_passports, parsed_file = parseCSV()#file)
+    num_passports, parsed_file = parseCSV(file)
     # Если запуск первый, то сохранить только бэкап
     if not pure_start:
         # Получение имени предыдущей версии реестра для вычисления дельты
-        first_backup, backup_file = getBackFile()#file)
+        first_backup, backup_file = getBackFile(file)
         # Сравнение старой и новой версии баз, выделение дельты (инкрементальной, но можно и любой другой)
         calcDeltaFast(backup_file, parsed_file, num_passports)
-    
-    # postprocessing(parsed_file, first_backup)#, file, compressfile)
+        # Постобработка
+        postprocessing(parsed_file, first_backup, file, compressfile)
 
     t1 = time.time()
     print('Parser ended!')
