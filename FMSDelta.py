@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v0.8                                                      #
+# Версия: v0.9                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -22,6 +22,8 @@ import os
 fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports.csv.bz2'
 # Флаг запуска. Поставить 1 при первичном запуске. Скачивание + парсинг. Без дельты.
 pure_start = 0
+# Флаг завершения. По умолчанию очищает директорию от временных файлов.
+clean_finish = 1
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 # Выполнить pure_start = 1 после изменения. Менять только 'date'
 postfix = '_' + datetime.today().strftime('%Y%m%d') + '.txt' # _date.txt
@@ -89,7 +91,7 @@ def parseCSV(filename='list_of_expired_passports.csv'):
     logging('Parsing ' + filename)
     pfilename = filename[:-4] + postfix
     with open(filename, 'r', encoding='utf8') as csvIN, \
-        open(pfilename, 'w') as csvOUT, \
+        open(pfilename, 'w') as txtOUT, \
         open('brokenData.txt', 'w') as txtBroke:
         csvIN.readline()
         num = 0
@@ -97,17 +99,17 @@ def parseCSV(filename='list_of_expired_passports.csv'):
         for line in csvIN:
             a,b = line.replace('\n','').split(',')
             if len(a) == 4 and len(b) == 6 and (a+b).isdigit():
-                csvOUT.write(a+b)
+                txtOUT.write(a + b + '\n')
                 num += 1
                 if num % 10**5 == 0:
                     print('Passports:', num, end='\r')
             else:
                 err += 1
-                txtBroke.write(a + ',' + b)
+                txtBroke.write(a + ',' + b + '\n')
         print('Parsed', num, 'passports!')
         print('File:', pfilename)
-        print('Broken Data: brokenData.txt (' + err + ')')
-        logging('Parsed ' + num + ' passports!\nFile: ' + pfilename + '\nBroken Data: brokenData.txt (' + err + ')')
+        print('Broken Data: brokenData.txt (' + str(err) + ')')
+        logging('Parsed ' + str(num) + ' passports!\nFile: ' + pfilename + '\nBroken Data: brokenData.txt (' + str(err) + ')')
         return num, pfilename
 
 
@@ -139,7 +141,7 @@ def getBackFile(filename='list_of_expired_passports.csv'):
             first = int(file[1-n:-4])
     print('Got first backup:', first)
     print('Got last backup:', last)
-    logging('Got first backup: ' + first + '\nGot last backup: ' + last)
+    logging('Got first backup: ' + str(first) + '\nGot last backup: ' + str(last))
     return (filename[:-4] + '_' + str(first) + '.txt'), (filename[:-4] + '_' + str(last) + '.txt')
 
 
@@ -160,9 +162,9 @@ def calcDeltaFast(fileOld, fileNew, N):
     print('Calculating delta')
     stackMinus = set()
     stackPlus = set()
-    with open(fileNew, 'r') as csvNEW, open('./backup/' + fileOld, 'r') as csvOLD, \
+    with open(fileNew, 'r') as txtNEW, open('./backup/' + fileOld, 'r') as txtOLD, \
         open('deltaPlus' + postfix, 'w') as deltaPlus, open('deltaMinus' + postfix, 'w') as deltaMinus:
-        for lineO, lineN in zip(csvOLD, csvNEW):
+        for lineO, lineN in zip(txtOLD, txtNEW):
             k -= 1
             if k % 100000 == 0:
                 print(k, end='\r')
@@ -176,9 +178,9 @@ def calcDeltaFast(fileOld, fileNew, N):
                 tmp_.clear()
         for i in range(0, abs(N - O)):
             if N > O:
-                stackPlus.add(csvNEW.readline())
+                stackPlus.add(txtNEW.readline())
             else:
-                stackMinus.add(csvOLD.readline())
+                stackMinus.add(txtOLD.readline())
         tmp_ = stackMinus.difference(stackPlus)
         stackPlus.difference_update(stackMinus)
         stackMinus = tmp_.copy()
@@ -252,7 +254,7 @@ def init():
     
 
     # Начальное логирование
-    logging('# -------------------------------------------------- #', 1)
+    logging('# ----------------------------------------------------------------------------------------- #', 1)
     logging('New log starts: ' + datetime.today().strftime('%d/%m/%y %H:%M'), 1)
     logging('------------ Variables ------------', 1)
     logging('Start type: ' + ('pure' if pure_start else 'not pure'), 1)
@@ -269,17 +271,16 @@ def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.cs
     print('Postprocessing')
     logging('Postprocessing', 1)
     # Переносим файлы в бэкап и дельту с заменой
-    if os.path.exists('./backup/' + parsed_file):
+    if os.path.exists('./backup/' + parsed_file) and os.path.exists(parsed_file):
         os.remove('./backup/' + parsed_file)
-    if os.path.exists('./delta/deltaPlus' + postfix):
+        os.rename(parsed_file, './backup/' + parsed_file)
+    if os.path.exists('./delta/deltaPlus' + postfix) and os.path.exists('deltaPlus' + postfix):
         os.remove('./delta/deltaPlus' + postfix)
-    if os.path.exists('./delta/deltaMinus' + postfix):
-        os.remove('./delta/deltaMinus' + postfix)
-    os.rename(parsed_file, './backup/' + parsed_file)
-    if os.path.exists('deltaPlus' + postfix):
         os.rename('deltaPlus' + postfix, './delta/deltaPlus' + postfix)
-    if os.path.exists('deltaMinus' + postfix):
+    if os.path.exists('./delta/deltaMinus' + postfix) and os.path.exists('deltaMinus' + postfix):
+        os.remove('./delta/deltaMinus' + postfix)
         os.rename('deltaMinus' + postfix, './delta/deltaMinus' + postfix)
+        
     # Удаляем самый старый бэкап, если > 3
     f = []
     for root, dirs, files in os.walk('./backup'):  
@@ -289,12 +290,14 @@ def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.cs
         os.remove('./backup/' + first_backup)
         print('./backup/' + first_backup + ' removed')
         logging('./backup/' + first_backup + ' removed', 1)
+    
     # Очистка work directory
-    os.remove(compressfile)
-    os.remove(file)
-    print(compressfile + ' and ' + file + ' removed', 1)
-    logging(compressfile + ' and ' + file + ' removed', 1)
-    logging('# -------------------------------------------------- #', 1)
+    if clean_finish:
+        os.remove(compressfile)
+        os.remove(file)
+        print(compressfile + ' and ' + file + ' removed', 1)
+        logging(compressfile + ' and ' + file + ' removed', 1)
+    logging('# ----------------------------------------------------------------------------------------- #', 1)
 
 
 def main():
