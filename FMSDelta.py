@@ -59,7 +59,7 @@ def downloadFile(url):
 
 
 # Разархивирование bz2
-def decompressFile(filename):
+def decompressFile(filename='list_of_expired_passports.csv.bz2'):
     print('Extracting:', filename)
     with open(filename[:-4], 'wb') as csvfile, open(filename, 'rb') as zipfile:
         z = bz2.BZ2Decompressor()
@@ -70,7 +70,7 @@ def decompressFile(filename):
 
 
 # Удаление всех данных кроме вида: 1234,123456 (считаются ошибочными)
-def parseCSV(filename):
+def parseCSV(filename='list_of_expired_passports.csv'):
     print('Parsing:', filename)
     pfilename = filename[:-4] + postfix
     with open(filename, 'r', newline='', encoding='utf8') as csvIN, \
@@ -97,7 +97,7 @@ def parseCSV(filename):
 
 
 # Поиск в директории ./backup самого последнего файла по postfix дате
-def getBackFile(filename):
+def getBackFile(filename='list_of_expired_passports.csv'):
     print('Getting backup file to compare')
     n = len(postfix)
     f = []
@@ -224,7 +224,7 @@ def init():
 
 
 # Функция завершения. Перенос файлов и очистка директории
-def postprocessing(file, parsed_file, compressfile, first_backup):
+def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.csv', compressfile='list_of_expired_passports.csv.bz2'):
     # Переносим файлы в бэкап и дельту с заменой
     if os.path.exists('./backup/' + parsed_file):
         os.remove('./backup/' + parsed_file)
@@ -245,8 +245,8 @@ def postprocessing(file, parsed_file, compressfile, first_backup):
     if len(f) > 3 and os.path.exists('./backup/' + first_backup):
         os.remove('./backup/' + first_backup)
     # Очистка work directory
-    os.remove(compressfile)
-    os.remove(file)
+    # os.remove(compressfile)
+    # os.remove(file)
 
 
 def main():
@@ -270,7 +270,7 @@ def main():
         # Сравнение старой и новой версии баз, выделение дельты (инкрементальной, но можно и любой другой)
         calcDeltaFast(backup_file, parsed_file, num_passports)
     
-    postprocessing(file, parsed_file, compressfile, first_backup)
+    postprocessing(parsed_file, first_backup, file, compressfile)
 
     t1 = time.time()
     print('Parser ended!')
