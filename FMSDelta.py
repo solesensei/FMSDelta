@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v0.6                                                      #
+# Версия: v0.7                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -21,7 +21,7 @@ import os
 # Ссылка на реестр недействительных паспортов с сайта МВД
 fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports.csv.bz2'
 # Флаг запуска. Поставить 1 при первичном запуске. Скачивание + парсинг. Без дельты.
-pure_start = 0
+pure_start = 1
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.csv, delta_date.csv
 # Выполнить pure_start = 1 после изменения. Менять только 'date'
 postfix = '_' + datetime.today().strftime('%Y%m%d') + '.csv' # _date.csv
@@ -73,22 +73,20 @@ def decompressFile(filename='list_of_expired_passports.csv.bz2'):
 def parseCSV(filename='list_of_expired_passports.csv'):
     print('Parsing:', filename)
     pfilename = filename[:-4] + postfix
-    with open(filename, 'r', newline='', encoding='utf8') as csvIN, \
-        open(pfilename, 'w', newline='') as csvOUT, \
-        open('brokenData.csv', 'w', newline='') as csvBroke:
-        readCSV = csv.reader(csvIN, delimiter=',')
-        writeCSV = csv.writer(csvOUT, delimiter=',')
-        brokeCSV = csv.writer(csvBroke, delimiter=',')
-        writeCSV.writerow(next(readCSV))
+    with open(filename, 'r', encoding='utf8') as csvIN, \
+        open(pfilename, 'w') as csvOUT, \
+        open('brokenData.txt', 'w') as txtBroke:
+        csvIN.readline()
         num = 0
-        for line in readCSV:
-            if len(line[0]) == 4 and len(line[1]) == 6 and isInteger(line[0]+line[1]):
-                writeCSV.writerow({line[0]+line[1]})
+        for line in csvIN:
+            a,b = line.replace('\n','').split(',')
+            if len(a) == 4 and len(b) == 6 and (a+b).isdigit():
+                csvOUT.write(a+b)
                 num += 1
                 if num % 10**5 == 0:
                     print('Passports:', num, end='\r')
             else:
-                brokeCSV.writerow({line[0]+line[1]})
+                txtBroke.write(a + ',' + b)
         print('Parsed', num, 'passports!')
         print('File:', pfilename)
         print('Broken Data: brokenData.csv')
@@ -258,19 +256,19 @@ def main():
         init()
 
     # Скачиваем реестр недействительных паспортов
-    compressfile = downloadFile(fms_url)
+    # compressfile = downloadFile(fms_url)
     # Распаковываем архив в текущую директорию
-    file = decompressFile(compressfile)
+    # file = decompressFile(compressfile)
     # Подчищаем файл от битых данных
-    num_passports, parsed_file = parseCSV(file)
+    num_passports, parsed_file = parseCSV()#file)
     # Если запуск первый, то сохранить только бэкап
     if not pure_start:
         # Получение имени предыдущей версии реестра для вычисления дельты
-        first_backup, backup_file = getBackFile(file)
+        first_backup, backup_file = getBackFile()#file)
         # Сравнение старой и новой версии баз, выделение дельты (инкрементальной, но можно и любой другой)
         calcDeltaFast(backup_file, parsed_file, num_passports)
     
-    postprocessing(parsed_file, first_backup, file, compressfile)
+    # postprocessing(parsed_file, first_backup)#, file, compressfile)
 
     t1 = time.time()
     print('Parser ended!')
