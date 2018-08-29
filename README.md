@@ -29,6 +29,8 @@
 fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports.csv.bz2'
 # Флаг запуска. Поставить 1 при первичном запуске. Скачивание + парсинг. Без дельты.
 pure_start = 0
+# Флаг завершения. По умолчанию очищает директорию от временных файлов.
+clean_finish = 1
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 # Выполнить pure_start = 1 после изменения. Менять только 'date'
 postfix = '_' + datetime.today().strftime('%Y%m%d') + '.txt' # _date.txt
