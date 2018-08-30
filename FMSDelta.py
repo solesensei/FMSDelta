@@ -298,7 +298,7 @@ def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.cs
     if clean_finish:
         os.remove(compressfile)
         os.remove(file)
-        print(compressfile + ' and ' + file + ' removed', 1)
+        print(compressfile + ' and ' + file + ' removed')
         logging(compressfile + ' and ' + file + ' removed', 1)
     logging('# ----------------------------------------------------------------------------------------- #', 1)
 
