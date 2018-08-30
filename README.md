@@ -45,8 +45,17 @@ blocksize = 15 * 10 ** 6
 ## Запуск
 Для запуска скрипта необходимо выполнить следующую команду. 
 ```bash
-# used python 3.7
+# using executable 
+FMSDelta.exe
+# using python 3.7
 python FMSDelta.py
+```
+### Сбор executable файла
+Для сборки __executable__ файла использовалась утилита `pyinstaller`. 
+```bash
+# using pyinstaller and python3.6
+pip install pyinstaller
+pyinstaller --onefile FMSDelta.py
 ```
 
 ## Результат
@@ -56,6 +65,7 @@ python FMSDelta.py
 -delta/ # директория с файлами посчитанных дельт, неограниченное количество
 -log/ # директория лог файлов, неограниченное количество
 FMSDelta.py # скрипт
+FMSDelta.exe # executable файл скрипта
 brokenData.txt # текстовый файл, полученный в результате парсинга реестра, содержит битые данные
 README.md # этот текстовый документ
 ```

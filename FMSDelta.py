@@ -4,17 +4,16 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v0.9                                                      #
+# Версия: v1.0                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
 import csv
 import time
 from datetime import datetime
-import requests  # pip3 install request
+import requests  # pip3 install requests
 import bz2
 import os
-
 
 # ------------------------------ Динамические переменные ------------------------------ # 
 
@@ -141,7 +140,7 @@ def getBackFile(filename='list_of_expired_passports.csv'):
             first = int(file[1-n:-4])
     print('Got first backup:', first)
     print('Got last backup:', last)
-    logging('Got first backup: ' + str(first) + '\nGot last backup: ' + str(last))
+    logging('Got first backup: ' + str(first) + 'Got last backup: ' + str(last))
     return (filename[:-4] + '_' + str(first) + '.txt'), (filename[:-4] + '_' + str(last) + '.txt')
 
 
@@ -270,17 +269,21 @@ def init():
 def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.csv', compressfile='list_of_expired_passports.csv.bz2'):
     print('Postprocessing')
     logging('Postprocessing', 1)
+
     # Переносим файлы в бэкап и дельту с заменой
-    if os.path.exists('./backup/' + parsed_file) and os.path.exists(parsed_file):
+    if os.path.exists('./backup/' + parsed_file):
         os.remove('./backup/' + parsed_file)
-        os.rename(parsed_file, './backup/' + parsed_file)
-    if os.path.exists('./delta/deltaPlus' + postfix) and os.path.exists('deltaPlus' + postfix):
+    if os.path.exists('./delta/deltaPlus' + postfix):
         os.remove('./delta/deltaPlus' + postfix)
+    if os.path.exists('./delta/deltaMinus' + postfix):
+        os.remove('./delta/deltaMinus' + postfix)    
+    if os.path.exists(parsed_file):
+        os.rename(parsed_file, './backup/' + parsed_file)
+    if os.path.exists('deltaPlus' + postfix):
         os.rename('deltaPlus' + postfix, './delta/deltaPlus' + postfix)
-    if os.path.exists('./delta/deltaMinus' + postfix) and os.path.exists('deltaMinus' + postfix):
-        os.remove('./delta/deltaMinus' + postfix)
+    if os.path.exists('deltaMinus' + postfix):
         os.rename('deltaMinus' + postfix, './delta/deltaMinus' + postfix)
-        
+
     # Удаляем самый старый бэкап, если > 3
     f = []
     for root, dirs, files in os.walk('./backup'):  
@@ -310,7 +313,7 @@ def main():
     # Скачиваем реестр недействительных паспортов
     compressfile = downloadFile(fms_url)
     # Распаковываем архив в текущую директорию
-    file = decompressFile(compressfile)
+    first_backup = file = decompressFile(compressfile)
     # Подчищаем файл от битых данных
     num_passports, parsed_file = parseCSV(file)
     # Если запуск первый, то сохранить только бэкап
@@ -326,8 +329,8 @@ def main():
     t1 = time.time()
     print('Parser ended!')
     print('Time: ', '{:g}'.format((t1 - t0) // 60), 'm ', '{:.0f}'.format((t1 - t0) % 60), 's', sep='')
-    logging('---------------\nCompleted!')
-    logging('Time: ' + str('{:g}'.format((t1 - t0) // 60)) + 'm ' + str('{:.0f}'.format((t1 - t0) % 60)) + 's')
+    logging('---------------\nCompleted!', 1)
+    logging('Time: ' + str('{:g}'.format((t1 - t0) // 60)) + 'm ' + str('{:.0f}'.format((t1 - t0) % 60)) + 's', 1)
 
     # Постобработка - завершение
     postprocessing(parsed_file, first_backup, file, compressfile)
