@@ -15,7 +15,7 @@ import requests  # pip3 install requests
 import bz2
 import os
 
-# ------------------------------ Динамические переменные ------------------------------ # 
+# ------------------------------ Динамические переменные ------------------------------ #
 
 # Ссылка на реестр недействительных паспортов с сайта МВД
 fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports.csv.bz2'
@@ -25,9 +25,9 @@ pure_start = 0
 clean_finish = 1
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 # Выполнить pure_start = 1 после изменения. Менять только 'date'
-postfix = '_' + datetime.today().strftime('%Y%m%d') + '.txt' # _date.txt
+postfix = '_' + datetime.today().strftime('%Y%m%d') + '.txt'  # _date.txt
 # Выбор функции вычисления дельты. Стабильная - медленная, включать по необходимости
-delta_type = 'fast' # 'fast' / 'stable'
+delta_type = 'fast'  # 'fast' / 'stable'
 # Размер блока чтения (в строках). Больше значение - Больше расход RAM (для calcDeltaStable)
 blocksize = 15 * 10 ** 6
 
@@ -51,6 +51,7 @@ def logging(text, noTime=0):
         else:
             print(datetime.today().strftime('[%Y-%m-%d %H:%M:%S] ') + text, file=log)
 
+
 # Скачивание файла по ссылке
 def downloadFile(url):
     filename = url.split('/')[-1]
@@ -67,7 +68,7 @@ def downloadFile(url):
                 f.flush()
                 size += 1
     print('Downloaded:', filename, str(size // 1024) + 'MB')
-    logging('Downloaded: '+ filename + ' ' + str(size // 1024) + 'MB')
+    logging('Downloaded: ' + filename + ' ' + str(size // 1024) + 'MB')
     return filename
 
 
@@ -90,13 +91,13 @@ def parseCSV(filename='list_of_expired_passports.csv'):
     logging('Parsing ' + filename)
     pfilename = filename[:-4] + postfix
     with open(filename, 'r', encoding='utf8') as csvIN, \
-        open(pfilename, 'w') as txtOUT, \
-        open('brokenData.txt', 'w') as txtBroke:
+            open(pfilename, 'w') as txtOUT, \
+            open('brokenData.txt', 'w') as txtBroke:
         csvIN.readline()
         num = 0
         err = 0
         for line in csvIN:
-            a,b = line.replace('\n','').split(',')
+            a, b = line.replace('\n', '').split(',')
             if len(a) == 4 and len(b) == 6 and (a+b).isdigit():
                 txtOUT.write(a + b + '\n')
                 num += 1
@@ -108,7 +109,8 @@ def parseCSV(filename='list_of_expired_passports.csv'):
         print('Parsed', num, 'passports!')
         print('File:', pfilename)
         print('Broken Data: brokenData.txt (' + str(err) + ')')
-        logging('Parsed ' + str(num) + ' passports!\nFile: ' + pfilename + '\nBroken Data: brokenData.txt (' + str(err) + ')')
+        logging('Parsed ' + str(num) + ' passports!\nFile: ' +
+                pfilename + '\nBroken Data: brokenData.txt (' + str(err) + ')')
         return num, pfilename
 
 
@@ -118,15 +120,15 @@ def getBackFile(filename='list_of_expired_passports.csv'):
     logging('Getting backup file to compare')
     n = len(postfix)
     f = []
-    for root, dirs, files in os.walk('./backup'):  
+    for root, dirs, files in os.walk('./backup'):
         f.extend(files)
         break
     if len(f) == 0:
         print('No backup files! Abort.')
         logging('No backup files! Abort.')
         exit()
-    last = 0 # последний бэкап
-    first = 0 # первый бэкап
+    last = 0  # последний бэкап
+    first = 0  # первый бэкап
     for file in f:
         print(file)
         if not isInteger(file[1-n:-4]):
@@ -140,7 +142,8 @@ def getBackFile(filename='list_of_expired_passports.csv'):
             first = int(file[1-n:-4])
     print('Got first backup:', first)
     print('Got last backup:', last)
-    logging('Got first backup: ' + str(first) + 'Got last backup: ' + str(last))
+    logging('Got first backup: ' + str(first) +
+            'Got last backup: ' + str(last))
     return (filename[:-4] + '_' + str(first) + '.txt'), (filename[:-4] + '_' + str(last) + '.txt')
 
 
@@ -150,7 +153,7 @@ def getBackFile(filename='list_of_expired_passports.csv'):
 # N - количество людей в новой базе
 def calcDeltaFast(fileOld, fileNew, N):
     print('Comparing:', fileOld, fileNew)
-    logging('Comparing: ' +  fileOld + ' ' + fileNew)
+    logging('Comparing: ' + fileOld + ' ' + fileNew)
     with open('./backup/' + fileOld, 'r') as fold:
         print('Counting passports in', fileOld)
         O = sum(1 for i in fold)
@@ -162,7 +165,7 @@ def calcDeltaFast(fileOld, fileNew, N):
     stackMinus = set()
     stackPlus = set()
     with open(fileNew, 'r') as txtNEW, open('./backup/' + fileOld, 'r') as txtOLD, \
-        open('deltaPlus' + postfix, 'w') as deltaPlus, open('deltaMinus' + postfix, 'w') as deltaMinus:
+            open('deltaPlus' + postfix, 'w') as deltaPlus, open('deltaMinus' + postfix, 'w') as deltaMinus:
         for lineO, lineN in zip(txtOLD, txtNEW):
             k -= 1
             if k % 100000 == 0:
@@ -201,9 +204,9 @@ def calcDeltaFast(fileOld, fileNew, N):
 # N - количество людей в новой базе
 def calcDeltaStable(fileOld, fileNew, N):
     print('Comparing:', fileOld, fileNew)
-    logging('Comparing: ' +  fileOld + ' ' + fileNew)
+    logging('Comparing: ' + fileOld + ' ' + fileNew)
     with open('deltaPlus' + postfix, 'w') as deltaPlus, \
-        open('deltaMinus' + postfix, 'w') as deltaMinus:
+            open('deltaMinus' + postfix, 'w') as deltaMinus:
         part = N if N <= blocksize else blocksize
         parts = N // part
         n = 0
@@ -217,7 +220,7 @@ def calcDeltaStable(fileOld, fileNew, N):
             for i in range(0, parts):
                 for k, line in enumerate(txtNEW):
                     setNew.add(line)
-                    if k == part-1: break
+                    if k == part - 1: break
                 with open('./backup/' + fileOld, 'r') as txtOLD:
                     for n in range(0, i * part):
                         txtOLD.readline()
@@ -252,7 +255,7 @@ def calcDeltaStable(fileOld, fileNew, N):
             for i in range(0, parts):
                 for k, line in enumerate(txtOLD):
                     setOld.add(line)
-                    if k == part-1: break
+                    if k == part - 1: break
                 with open(fileNew, 'r') as txtNEW:
                     for n in range(0, i * part):
                         txtNEW.readline()
@@ -274,8 +277,8 @@ def calcDeltaStable(fileOld, fileNew, N):
                                 setNew.clear()
                                 print('Checked:', N - n + k)
                                 if len(setOld) == 0 or k > n: break
-                    if len(setNew) > 0 and len(setOld)> 0:
-                        setOld.difference_update(setNew) # проверяем оставшиеся записи
+                    if len(setNew) > 0 and len(setOld) > 0:
+                        setOld.difference_update(setNew)  # проверяем оставшиеся записи
                 setNew.clear()
                 for line in setOld:
                     deltaM.add(line)
@@ -296,7 +299,6 @@ def init():
         os.mkdir('./log')
     if not os.path.exists('./log/log' + postfix):
         open('./log/log' + postfix, 'a').close()
-    
 
     # Начальное логирование
     logging('# ----------------------------------------------------------------------------------------- #', 1)
@@ -311,6 +313,7 @@ def init():
         logging('delta_type error: \'stable\' or \'fast\' expected! Abort.')
         exit()
 
+
 # Функция завершения. Перенос файлов и очистка директории
 def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.csv', compressfile='list_of_expired_passports.csv.bz2'):
     print('Postprocessing')
@@ -322,7 +325,7 @@ def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.cs
     if os.path.exists('./delta/deltaPlus' + postfix):
         os.remove('./delta/deltaPlus' + postfix)
     if os.path.exists('./delta/deltaMinus' + postfix):
-        os.remove('./delta/deltaMinus' + postfix)    
+        os.remove('./delta/deltaMinus' + postfix)
     if os.path.exists(parsed_file):
         os.rename(parsed_file, './backup/' + parsed_file)
     if os.path.exists('deltaPlus' + postfix):
@@ -332,14 +335,14 @@ def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.cs
 
     # Удаляем самый старый бэкап, если > 3
     f = []
-    for root, dirs, files in os.walk('./backup'):  
+    for root, dirs, files in os.walk('./backup'):
         f.extend(files)
         break
     if len(f) > 3 and os.path.exists('./backup/' + first_backup):
         os.remove('./backup/' + first_backup)
         print('./backup/' + first_backup + ' removed')
         logging('./backup/' + first_backup + ' removed', 1)
-    
+
     # Очистка work directory
     if clean_finish:
         os.remove(compressfile)
@@ -369,7 +372,7 @@ def main():
         # Сравнение старой и новой версии баз, выделение дельты
         if delta_type == 'fast':
             calcDeltaFast(backup_file, parsed_file, num_passports)
-        else: # stable
+        else:  # stable
             calcDeltaStable(backup_file, parsed_file, num_passports)
 
     t1 = time.time()
