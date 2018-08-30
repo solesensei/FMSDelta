@@ -15,8 +15,9 @@
 #### Ресурсы:
 - 115 000 000 паспортов в реестре
 - 900 MB RAM
-- time ~ 20 minutes (all)
+- time ~ 20 minutes (all - fast) / 1h (all - stable)
 - time ~ 3 minutes (fast calc delta)
+- time ~ 40 minutes (stable calc delta)
 
 ## Поедварительная настройка
 Возможна динамическая настройка скрипта через изменение параметров, приведенных ниже.

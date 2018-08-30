@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v1.0                                                      #
+# Версия: v1.1                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -202,39 +202,85 @@ def calcDeltaFast(fileOld, fileNew, N):
 def calcDeltaStable(fileOld, fileNew, N):
     print('Comparing:', fileOld, fileNew)
     logging('Comparing: ' +  fileOld + ' ' + fileNew)
-    with open(fileNew, 'r', newline='') as csvNEW, \
-        open('deltaPlus' + postfix, 'w', newline='') as csvDELTA:
-        readNEW = csv.reader(csvNEW, delimiter=',')
-        writeDelta = csv.writer(csvDELTA, delimiter=',')
-        writeDelta.writerow(next(readNEW))
+    with open('deltaPlus' + postfix, 'w') as deltaPlus, \
+        open('deltaMinus' + postfix, 'w') as deltaMinus:
         part = N if N <= blocksize else blocksize
         parts = N // part
-        print(part, parts)
+        n = 0
         setOld = set()
         setNew = set()
-        for i in range(0, parts):
-            print('Part:', i+1)
-            for k, line in enumerate(readNEW):
-                setNew.add(line[0]+line[1])
-                if k == part-1: break
-            with open('./backup/' + fileOld, 'r', newline='') as csvOLD:
-                readOLD = csv.reader(csvOLD, delimiter=',')
-                next(readOLD)
-                for k, line in enumerate(readOLD):
-                    setOld.add(line[0]+line[1])
-                    if k % part == 0 and k > 0:
-                        setNew.difference_update(setOld)
-                        setOld.clear()
-                        print('Checked:', k)
-                        if len(setNew) == 0: break
-                if len(setNew) > 0 and len(setOld)> 0:
-                    setNew.difference_update(setOld) # проверяем оставшиеся записи
-                    print('Checked:', k)
-            for line in setNew:
-                print(line, end='', file=csvDELTA)
-            print(len(setNew))
-            setOld.clear()
-            setNew.clear()
+        deltaP = set()
+        deltaM = set()
+        print('Delta Plus computing')
+        logging('Delta Plus computing')
+        with open(fileNew, 'r') as txtNEW:
+            for i in range(0, parts):
+                for k, line in enumerate(txtNEW):
+                    setNew.add(line)
+                    if k == part-1: break
+                with open('./backup/' + fileOld, 'r') as txtOLD:
+                    for n in range(0, i * part):
+                        txtOLD.readline()
+                    if n: print('Skipped', n)
+                    for k, line in enumerate(txtOLD):
+                        setOld.add(line)
+                        if k % part == 0 and k > 0:
+                            setNew.difference_update(setOld)
+                            setOld.clear()
+                            print('Checked:', k)
+                            if len(setNew) == 0: break
+                    if len(setNew) > 0:
+                        print('Jump to start of file')
+                        txtOLD.seek(0)
+                        for k, line in enumerate(txtOLD):
+                            setOld.add(line)
+                            if k % part == 0 and k > 0:
+                                setNew.difference_update(setOld)
+                                setOld.clear()
+                                print('Checked:', N - n + k)
+                                if len(setNew) == 0 or k > n: break
+                    if len(setNew) > 0 and len(setOld) > 0:
+                        setNew.difference_update(setOld) # проверяем оставшиеся записи
+                setOld.clear()
+                for line in setNew:
+                    deltaP.add(line)
+                    print(line, end='', file=deltaPlus)
+                setNew.clear()
+        print('Delta Minus computing')
+        logging('Delta Minus computing')
+        with open('./backup/' + fileOld, 'r') as txtOLD:
+            for i in range(0, parts):
+                for k, line in enumerate(txtOLD):
+                    setOld.add(line)
+                    if k == part-1: break
+                with open(fileNew, 'r') as txtNEW:
+                    for n in range(0, i * part):
+                        txtNEW.readline()
+                    if n: print('Skipped', n)
+                    for k, line in enumerate(txtNEW):
+                        setNew.add(line)
+                        if k % part == 0 and k > 0:
+                            setOld.difference_update(setNew)
+                            setNew.clear()
+                            print('Checked:', k)
+                            if len(setOld) == 0: break
+                    if len(setOld) > 0:
+                        print('Jump to start of file')
+                        txtNEW.seek(0)
+                        for k, line in enumerate(txtNEW):
+                            setNew.add(line)
+                            if k % part == 0 and k > 0:
+                                setOld.difference_update(setNew)
+                                setNew.clear()
+                                print('Checked:', N - n + k)
+                                if len(setOld) == 0 or k > n: break
+                    if len(setNew) > 0 and len(setOld)> 0:
+                        setOld.difference_update(setNew) # проверяем оставшиеся записи
+                setNew.clear()
+                for line in setOld:
+                    deltaM.add(line)
+                    print(line, end='', file=deltaMinus)
+                setOld.clear()
     print('Compared!')
     logging('Compared!')
 
