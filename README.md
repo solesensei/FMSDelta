@@ -35,7 +35,7 @@ clean_finish = 1
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 # Выполнить pure_start = 1 после изменения. Менять только 'date'
 postfix = '_' + datetime.today().strftime('%Y%m%d') + '.txt' # _date.txt
-# Выбор функции вычисления дельты. Стабильная - медленная, включать по необходимости (инкремент)
+# Выбор функции вычисления дельты. Стабильная - медленная, включать по необходимости
 delta_type = 'fast' # 'fast' / 'stable'
 # Размер блока чтения (в строках). Больше значение - Больше расход RAM (для calcDeltaStable)
 blocksize = 15 * 10 ** 6
