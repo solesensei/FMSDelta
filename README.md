@@ -8,16 +8,16 @@
 Использовался __Python 3.7__
 
 #### Система разработки:
-- OS: Windows 10 x64
-- RAM: 8GB
-- Core: i3
+- __OS:__ Windows 10 x64
+- __RAM:__ 8GB
+- __Core:__ i3
 
 #### Ресурсы:
-- 115 000 000 паспортов в реестре
-- 900 MB RAM
-- time ~ 20 minutes (all - fast) / 1h (all - stable)
-- time ~ 3 minutes (fast calc delta)
-- time ~ 40 minutes (stable calc delta)
+- __115 000 000__ паспортов в реестре
+- __900__ MB RAM
+- __time__ ~ 20 minutes (all - fast) / 1h (all - stable)
+- __time__ ~ 3 minutes (fast calc delta)
+- __time__ ~ 40 minutes (stable calc delta)
 
 ## Предварительная настройка
 Возможна динамическая настройка скрипта через изменение параметров, приведенных ниже.
@@ -47,7 +47,9 @@ blocksize = 15 * 10 ** 6
 Для запуска скрипта необходимо выполнить следующую команду. 
 ```bash
 # using executable 
-FMSDelta.exe
+pure_start.exe # first run
+delta_fast.exe # fast calcultations, < 1GB RAM
+delta_stable.exe # slow calcultations, > 1GB RAM
 # using python 3.7
 python FMSDelta.py
 ```
@@ -66,7 +68,9 @@ pyinstaller --onefile FMSDelta.py
 -delta/ # директория с файлами посчитанных дельт, неограниченное количество
 -log/ # директория лог файлов, неограниченное количество
 FMSDelta.py # скрипт
-FMSDelta.exe # executable файл скрипта
+pure_start.exe # executable файл скрипта для первичного запуска, с параметром % pure_start = 1 %
+delta_fast.exe # executable файл скрипта, с параметром % delta_type = 'fast' %
+delta_stable.exe # executable файл скрипта, с параметром % delta_type = 'stable' %
 brokenData.txt # текстовый файл, полученный в результате парсинга реестра, содержит битые данные
 README.md # этот текстовый документ
 ```

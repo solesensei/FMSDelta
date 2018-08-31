@@ -4,11 +4,10 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v1.1                                                      #
+# Версия: v1.2                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
-import csv
 import time
 from datetime import datetime
 import requests  # pip3 install requests
@@ -27,7 +26,7 @@ clean_finish = 1
 # Выполнить pure_start = 1 после изменения. Менять только 'date'
 postfix = '_' + datetime.today().strftime('%Y%m%d') + '.txt'  # _date.txt
 # Выбор функции вычисления дельты. Стабильная - медленная, включать по необходимости
-delta_type = 'fast'  # 'fast' / 'stable'
+delta_type = 'stable'  # 'fast' / 'stable'
 # Размер блока чтения (в строках). Больше значение - Больше расход RAM (для calcDeltaStable)
 blocksize = 15 * 10 ** 6
 
@@ -57,6 +56,12 @@ def downloadFile(url):
     filename = url.split('/')[-1]
     print('Downloading:', filename)
     logging('Downloading: ' + filename)
+    # Если файл уже существует - пропуск
+    if os.path.exists(filename):
+        print(filename, 'exists! Skipped!')
+        logging(filename + ' exists! Skipped!')
+        return filename
+
     r = requests.get(url, stream=True)
     with open(filename, 'wb') as f:
         size = 0
@@ -76,6 +81,12 @@ def downloadFile(url):
 def decompressFile(filename='list_of_expired_passports.csv.bz2'):
     print('Extracting:', filename)
     logging('Extracting: ' + filename)
+    # Если файл уже существует - пропуск
+    if os.path.exists(filename[:-4]):
+        print(filename[:-4], 'exists! Skipped!')
+        logging(filename[:-4] + ' exists! Skipped!')
+        return filename[:-4]
+
     with open(filename[:-4], 'wb') as csvfile, open(filename, 'rb') as zipfile:
         z = bz2.BZ2Decompressor()
         for block in iter(lambda: zipfile.read(200 * 1024), b''):
@@ -90,12 +101,20 @@ def parseCSV(filename='list_of_expired_passports.csv'):
     print('Parsing:', filename)
     logging('Parsing ' + filename)
     pfilename = filename[:-4] + postfix
+    num = 0
+    err = 0
+    # Если файл уже существует - пропуск
+    if os.path.exists(pfilename):
+        with open(pfilename, 'r') as pfile:
+            num = sum(1 for i in pfile)
+        print(pfilename, 'exists!', num, 'passports! Skipped!')
+        logging(pfilename + ' exists! ' + str(num) + ' passports! Skipped!')
+        return num, pfilename
+    
     with open(filename, 'r', encoding='utf8') as csvIN, \
             open(pfilename, 'w') as txtOUT, \
             open('brokenData.txt', 'w') as txtBroke:
         csvIN.readline()
-        num = 0
-        err = 0
         for line in csvIN:
             a, b = line.replace('\n', '').split(',')
             if len(a) == 4 and len(b) == 6 and (a+b).isdigit():
@@ -124,8 +143,8 @@ def getBackFile(filename='list_of_expired_passports.csv'):
         f.extend(files)
         break
     if len(f) == 0:
-        print('No backup files! Abort.')
-        logging('No backup files! Abort.')
+        print('No backup files! Set \'pure_start = 1\' Abort.')
+        logging('No backup files! Set \'pure_start = 1\' Abort.')
         exit()
     last = 0  # последний бэкап
     first = 0  # первый бэкап
@@ -143,7 +162,7 @@ def getBackFile(filename='list_of_expired_passports.csv'):
     print('Got first backup:', first)
     print('Got last backup:', last)
     logging('Got first backup: ' + str(first) +
-            'Got last backup: ' + str(last))
+            ' Got last backup: ' + str(last))
     return (filename[:-4] + '_' + str(first) + '.txt'), (filename[:-4] + '_' + str(last) + '.txt')
 
 
@@ -208,12 +227,10 @@ def calcDeltaStable(fileOld, fileNew, N):
     with open('deltaPlus' + postfix, 'w') as deltaPlus, \
             open('deltaMinus' + postfix, 'w') as deltaMinus:
         part = N if N <= blocksize else blocksize
-        parts = N // part
+        parts = N // part + 1
         n = 0
         setOld = set()
         setNew = set()
-        deltaP = set()
-        deltaM = set()
         print('Delta Plus computing')
         logging('Delta Plus computing')
         with open(fileNew, 'r') as txtNEW:
@@ -246,11 +263,11 @@ def calcDeltaStable(fileOld, fileNew, N):
                         setNew.difference_update(setOld) # проверяем оставшиеся записи
                 setOld.clear()
                 for line in setNew:
-                    deltaP.add(line)
                     print(line, end='', file=deltaPlus)
                 setNew.clear()
         print('Delta Minus computing')
         logging('Delta Minus computing')
+        n = 0
         with open('./backup/' + fileOld, 'r') as txtOLD:
             for i in range(0, parts):
                 for k, line in enumerate(txtOLD):
@@ -281,7 +298,6 @@ def calcDeltaStable(fileOld, fileNew, N):
                         setOld.difference_update(setNew)  # проверяем оставшиеся записи
                 setNew.clear()
                 for line in setOld:
-                    deltaM.add(line)
                     print(line, end='', file=deltaMinus)
                 setOld.clear()
     print('Compared!')
@@ -320,11 +336,11 @@ def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.cs
     logging('Postprocessing', 1)
 
     # Переносим файлы в бэкап и дельту с заменой
-    if os.path.exists('./backup/' + parsed_file):
+    if os.path.exists('./backup/' + parsed_file) and os.path.exists(parsed_file):
         os.remove('./backup/' + parsed_file)
-    if os.path.exists('./delta/deltaPlus' + postfix):
+    if os.path.exists('./delta/deltaPlus' + postfix) and os.path.exists('deltaPlus' + postfix):
         os.remove('./delta/deltaPlus' + postfix)
-    if os.path.exists('./delta/deltaMinus' + postfix):
+    if os.path.exists('./delta/deltaMinus' + postfix) and os.path.exists('deltaMinus' + postfix):
         os.remove('./delta/deltaMinus' + postfix)
     if os.path.exists(parsed_file):
         os.rename(parsed_file, './backup/' + parsed_file)
