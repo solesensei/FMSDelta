@@ -35,7 +35,7 @@ clean_finish = 1
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 # Выполнить pure_start = 1 после изменения. Менять только 'date'
 postfix = '_' + datetime.today().strftime('%Y%m%d') + '.txt' # _date.txt
-# Выбор функции вычисления дельты. Стабильная - медленная, включать по необходимости
+# Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
 delta_type = 'fast' # 'fast' / 'stable'
 # Размер блока чтения (в строках). Больше значение - Больше расход RAM (для calcDeltaStable)
 blocksize = 15 * 10 ** 6
@@ -48,8 +48,8 @@ blocksize = 15 * 10 ** 6
 ```bash
 # using executable 
 pure_start.exe # first run
-delta_fast.exe # fast calcultations, < 1GB RAM
-delta_stable.exe # slow calcultations, > 1GB RAM
+delta_fast.exe # fast calcultations, small delta
+delta_stable.exe # stable calcultations, big delta
 # using python 3.7
 python FMSDelta.py
 ```
