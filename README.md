@@ -31,14 +31,15 @@ fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports
 # Флаг запуска. Поставить 1 при первичном запуске. Скачивание + парсинг. Без дельты.
 pure_start = 0
 # Флаг завершения. По умолчанию очищает директорию от временных файлов.
-clean_finish = 1
+clean_finish = 0
+# Формат файлов
+fformat = '.txt'
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
-# Выполнить pure_start = 1 после изменения. Менять только 'date'
-postfix = '_' + datetime.today().strftime('%Y%m%d') + '.txt' # _date.txt
+postfix = datetime.today().strftime('%Y%m%d')  # _date.fformat
 # Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
-delta_type = 'fast' # 'fast' / 'stable'
-# Размер блока чтения (в строках). Больше значение - Больше расход RAM (для calcDeltaStable)
-blocksize = 15 * 10 ** 6
+delta_type = 'fast'  # 'fast' / 'stable'
+# Количество используемой оперативной памяти. Связано с размером блока паспортов.
+ram_use = '2GB 500MB' # [MB|GB] exm: '2GB 700MB' 
 
 # ------------------------------------------------------------------------------------- #
 ```
