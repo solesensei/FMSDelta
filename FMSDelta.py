@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v1.4                                                      #
+# Версия: v1.5                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -31,7 +31,7 @@ delta_type = 'fast'  # 'fast' / 'stable'
 # Количество используемой оперативной памяти. Связано с размером блока паспортов.
 ram_use = '2GB 500MB' # [MB|GB] exm: '2GB 700MB' 
 # ОКАТО коды регионов
-okato_codes = [1, 3, 4, 5, 7, 8, 11, 12, 14, 15, 17, 19, 20, 20, 22, 24, 25, 26, 27, 28, 29, 32, 33, 34, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
+okato_codes = [1, 3, 4, 5, 7, 8, 11, 12, 14, 15, 17, 19, 20, 22, 24, 25, 26, 27, 28, 29, 32, 33, 34, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
 
 # ------------------------------------------------------------------------------------- #
 
@@ -115,25 +115,25 @@ def decompressFile(filename='list_of_expired_passports.csv.bz2'):
     print('Extracting:', filename)
     logging('Extracting: ' + filename)
     # Если файл уже существует - пропуск
-    if os.path.exists(filename[:-4]):
-        print(filename[:-4], 'exists! Skipped!')
-        logging(filename[:-4] + ' exists! Skipped!')
-        return filename[:-4]
+    if os.path.exists(filename[:-len(fformat)]):
+        print(filename[:-len(fformat)], 'exists! Skipped!')
+        logging(filename[:-len(fformat)] + ' exists! Skipped!')
+        return filename[:-len(fformat)]
 
-    with open(filename[:-4], 'wb') as csvfile, open(filename, 'rb') as zipfile:
+    with open(filename[:-len(fformat)], 'wb') as csvfile, open(filename, 'rb') as zipfile:
         z = bz2.BZ2Decompressor()
-        for block in iter(lambda: zipfile.read(200 * 1024), b''):
+        for block in iter(lambda: zipfile.read(512 * 1024), b''):
             csvfile.write(z.decompress(block))
-    print('Extracted', filename[:-4])
-    logging('Extracted ' + filename[:-4])
-    return filename[:-4]
+    print('Extracted', filename[:-len(fformat)])
+    logging('Extracted ' + filename[:-len(fformat)])
+    return filename[:-len(fformat)]
 
 
 # Удаление всех данных кроме вида: 1234,123456 (считаются ошибочными)
 def parseCSV(filename='list_of_expired_passports.csv'):
     print('Parsing:', filename)
     logging('Parsing ' + filename)
-    pfilename = filename[:-4] + postfix
+    pfilename = filename[:-len(fformat)] + postfix
     num = 0
     err = 0
     # Если файл уже существует - пропуск
@@ -204,11 +204,10 @@ def calcSkip(file, stack, N, start_from, t):
     print('Delta ' + t + ' is too big, comparing to the end of file')
     logging('Delta ' + t + ' is too big, comparing to the end of file')
     n = 0
-    N -= start_from
     with open(file, 'r') as txt:
-        for n in range(0, start_from):
-            next(txt)
-        print('Starting from', start_from)
+        # for n in range(0, start_from):
+            # txt.readline()
+        # print('Starting from', start_from)
         for line in txt:
             n += 1
             elem = int(line)
@@ -252,15 +251,11 @@ def calcDeltaFast(fileOld, fileNew, N):
                 if elemO != elemN:
                     stackMinus.add(elemO)
                     stackPlus.add(elemN)
-                if k % (blocksize//4) == 0:
-                    # ins_ = stackMinus.intersection(stackPlus)
-                    # stackMinus.difference_update(ins_)
-                    # stackPlus.difference_update(ins_)
-                    # ins_.clear()
-                    tmp_ = stackMinus.difference(stackPlus)
-                    stackPlus.difference_update(stackMinus)
-                    stackMinus = tmp_.copy()
-                    tmp_.clear()
+                if k % (2 * 10 ** 6) == 0:
+                    ins_ = stackMinus.intersection(stackPlus)
+                    stackMinus.difference_update(ins_)
+                    stackPlus.difference_update(ins_)
+                    ins_.clear()
                     # Защита от переполнения RAM
                     if len(stackPlus) > blocksize:
                         stackPlus = calcSkip('./backup/' + fileOld, stackPlus, O,  k, 'plus')
@@ -474,7 +469,7 @@ def main():
 
     # Инициализация
     init()
-    print(blocksize)
+
     # Скачиваем реестр недействительных паспортов
     compressfile = downloadFile(fms_url)
     # Распаковываем архив в текущую директорию
