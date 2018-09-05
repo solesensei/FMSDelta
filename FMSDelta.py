@@ -31,7 +31,7 @@ postfix = datetime.today().strftime('%Y%m%d')  # _date.fformat
 # Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
 delta_type = 'stable'  # 'fast' / 'stable'
 # Количество используемой оперативной памяти. Связано с размером блока паспортов.
-ram_use = '2GB' # [MB|GB] exm: '2GB 700MB' 
+ram_use = '200MB' # [MB|GB] exm: '2GB 700MB' 
 # ОКАТО коды регионов
 okato_codes = [1, 3, 4, 5, 7, 8, 11, 12, 14, 15, 17, 19, 20, 22, 24, 25, 26, 27, 28, 29, 32, 33, 34, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
 
@@ -257,7 +257,32 @@ def calcSkip(file, stack, N, start_from, t):
     logging('Cleared to the end: delta ' + t)
     return stack
 
+def calcDeltaRAM(fileOld, fileNew, N):
+    stackN = set()
+    stackO = set()
+    with open('deltaPlus' + postfix, 'w') as deltaPlus, open('deltaMinus' + postfix, 'w') as deltaMinus:
+        k = 0
+        n = 0
+        with open(fileNew, 'r') as txtNEW:
+            for lineN in txtNEW:
+                n += 1
+                if len(stackN) > blocksize:
+                    k += 1
+                    print('Next block:', k, n)
+                    with open('./backup/' + fileOld, 'r') as txtOLD:
+                        for lineO in txtOLD:
+                            elemO = setFormat(lineO)
+                            if elemO in stackN:
+                                stackN.remove(elemO)
+                                lineN = txtNEW.readline()
+                                n += 1
+                                if not lineN: 
+                                    break
+                                stackN.add(setFormat(lineN))
+                else:
+                    stackN.add(setFormat(lineN))
 
+            
 # Вычисление дельты (быстрая версия, 1 прогон) ~ 5 мин
 # fileOld - предыдущая версия
 # fileNew - новая версия
@@ -533,7 +558,8 @@ def main():
         if delta_type == 'fast':
             calcDeltaFast(backup_file, parsed_file, num_passports)
         else:  # stable
-            calcDeltaStable(backup_file, parsed_file, num_passports)
+            calcDeltaRAM(backup_file, parsed_file, num_passports)
+            # calcDeltaStable(backup_file, parsed_file, num_passports)
         # Конвертирование в формат Кроноса        
         if kronos:
             formatKronos('deltaPlus' + postfix, 'kronos_add')
