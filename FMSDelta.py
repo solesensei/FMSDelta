@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v1.5                                                      #
+# Версия: v1.6                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -20,16 +20,18 @@ import os
 fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports.csv.bz2'
 # Флаг запуска. Поставить 1 при первичном запуске. Скачивание + парсинг. Без дельты.
 pure_start = 0
-# Флаг завершения. По умолчанию очищает директорию от временных файлов.
-clean_finish = 0
+# Флаг завершения. По умолчанию очищает директорию от временных файлов и старых бэкапов.
+clean_finish = 1
+# Требуется ли загрузка в Кронос Синопсис
+kronos = 1
 # Формат файлов
 fformat = '.txt'
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 postfix = datetime.today().strftime('%Y%m%d')  # _date.fformat
 # Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
-delta_type = 'fast'  # 'fast' / 'stable'
+delta_type = 'stable'  # 'fast' / 'stable'
 # Количество используемой оперативной памяти. Связано с размером блока паспортов.
-ram_use = '2GB 500MB' # [MB|GB] exm: '2GB 700MB' 
+ram_use = '2GB' # [MB|GB] exm: '2GB 700MB' 
 # ОКАТО коды регионов
 okato_codes = [1, 3, 4, 5, 7, 8, 11, 12, 14, 15, 17, 19, 20, 22, 24, 25, 26, 27, 28, 29, 32, 33, 34, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
 
@@ -73,6 +75,35 @@ def toBlock(ram):
     blocksize = int(size / mblock * (5 * 10 ** 6))
     print('Blocksize computed: ' +  str(blocksize // 10**6) + 'm passports!') 
     logging('Blocksize computed: ' +  str(blocksize // 10**6) + 'm passports!') 
+
+
+# Конвертирует файл с номерами паспортов в формат для загрузки в Кронос
+def formatKronos(file, name):
+    print('Converting File to Kronos format')
+    logging('Converting File to Kronos format')
+    start_package = '++ ДД' # начало пакета
+    end_package = '++ ЯЯ' # конец пакета
+    start_message = '++ НН' # начало сообщения
+    end_message = '++ КК' # конец сообщения
+    div = '‡' # разделитель
+    mnemo_code = '++ МП' # мнемокод базы
+    # Начало строки
+    start_ = start_package + div + start_message + div + mnemo_code + div
+    # Конец строки
+    _end = div + end_message + div + end_package + div
+    with open(file, 'r') as fd, open(name + postfix, 'w') as kron:
+            print(file + ' converting to ' + name + postfix)
+            logging(file + ' converting to ' + name + postfix)
+            file_len = sum(1 for n in fd)
+            fd.seek(0)
+            for k, line in enumerate(fd):
+                kron.write(start_ + '01 ' + line[:4] + div + '02 ' + line[4:10] + _end)
+                if k < file_len - 1:
+                    kron.write('\n')
+                if k % 1000 == 0:
+                    print(str(k * 100 // file_len) + '%', end='\r')
+    print('Converted!')
+    logging('Converted!')
 
 
 # Запись в лог
@@ -147,7 +178,7 @@ def parseCSV(filename='list_of_expired_passports.csv'):
     with open(filename, 'r', encoding='utf8') as csvIN, \
             open(pfilename, 'w') as txtOUT, \
             open('brokenData.txt', 'w') as txtBroke:
-        csvIN.readline()
+        next(csvIN)
         for line in csvIN:
             a, b = line.replace('\n', '').split(',')
             if len(a) == 4 and len(b) == 6 and (a+b).isdigit():
@@ -183,21 +214,29 @@ def getBackFile(filename='list_of_expired_passports.csv'):
     last = 0  # последний бэкап
     first = 0  # первый бэкап
     for file in f:
-        print(file)
-        if not isInteger(file[-n:-flen]):
-            print('Postfix error: not a number! Abort.', file[-n:-flen])
-            logging('Postfix error: not a number! Abort. ' + file[-n:-flen])
+        end_f = file[-n:-flen]
+        if not isInteger(end_f):
+            print('Postfix error: not a number! Abort.', end_f)
+            logging('Postfix error: not a number! Abort. ' + end_f)
             exit()
-        if last < int(file[-n:-flen]):
-            last = int(file[-n:-flen])
+        if last < int(end_f):
+            last = int(end_f)
             first = last if first == 0 else first
-        if first > int(file[-n:-flen]):
-            first = int(file[-n:-flen])
+        if first > int(end_f):
+            first = int(end_f)
     print('Got first backup:', first)
     print('Got last backup:', last)
     logging('Got first backup: ' + str(first) +
             ' Got last backup: ' + str(last))
     return (filename[:-flen] + '_' + str(first) + fformat), (filename[:-flen] + '_' + str(last) + fformat)
+
+
+# Переводит строку в необходимый формат для записи в стек
+def setFormat(line):
+    if line[0] == '0':
+        return line.replace('\n', '')
+    return int(line)
+
 
 # Для calcDeltaFast. Если дельта > 1гб сравнить до конца файла.
 def calcSkip(file, stack, N, start_from, t):
@@ -205,20 +244,19 @@ def calcSkip(file, stack, N, start_from, t):
     logging('Delta ' + t + ' is too big, comparing to the end of file')
     n = 0
     with open(file, 'r') as txt:
-        # for n in range(0, start_from):
-            # txt.readline()
-        # print('Starting from', start_from)
         for line in txt:
             n += 1
-            elem = int(line)
+            elem = setFormat(line)
             if elem in stack:
                 stack.remove(elem)
+                if len(stack) == 0:
+                    break
             if n % 10**5 == 0:
                 print(N - n, end='\r')
-
-    print('Calclulated part of delta!')
-    logging('Calclulated part of delta!')
+    print('Cleared to the end: delta', t)
+    logging('Cleared to the end: delta ' + t)
     return stack
+
 
 # Вычисление дельты (быстрая версия, 1 прогон) ~ 5 мин
 # fileOld - предыдущая версия
@@ -238,13 +276,14 @@ def calcDeltaFast(fileOld, fileNew, N):
     print('Calculating delta')
     stackMinus = set()
     stackPlus = set()
+    skip_flg = False
     # for code in okato_codes:
     with open('deltaPlus' + postfix, 'w') as deltaPlus, open('deltaMinus' + postfix, 'w') as deltaMinus:
         k = 0
         with open(fileNew, 'r') as txtNEW, open('./backup/' + fileOld, 'r') as txtOLD:
             for lineO, lineN in zip(txtOLD, txtNEW):
-                elemO = int(lineO)
-                elemN = int(lineN)
+                elemO = setFormat(lineO)
+                elemN = setFormat(lineN)
                 k += 1
                 if k % 100000 == 0:
                     print(less_num - k, end='\r')
@@ -257,45 +296,52 @@ def calcDeltaFast(fileOld, fileNew, N):
                     stackPlus.difference_update(ins_)
                     ins_.clear()
                     # Защита от переполнения RAM
-                    if len(stackPlus) > blocksize:
-                        stackPlus = calcSkip('./backup/' + fileOld, stackPlus, O,  k, 'plus')
-                        for element in stackPlus:
-                            print(element, end='\n', file=deltaPlus)
-                        stackPlus.clear()
-                    if len(stackMinus) > blocksize:
-                        stackMinus = calcSkip(fileNew, stackMinus, N, k, 'minus')
-                        for element in stackMinus:
-                            print(element, end='\n', file=deltaMinus)
-                        stackMinus.clear()
+                    if len(stackPlus) + len(stackMinus) > 2*blocksize:
+                        skip_flg = True
+                        if len(stackPlus) > len(stackMinus):
+                            stackPlus = calcSkip('./backup/' + fileOld, stackPlus, O,  k, 'plus')
+                            for element in stackPlus:
+                                print(element, end='\n', file=deltaPlus)
+                            stackPlus.clear()
+                        else:
+                            stackMinus = calcSkip(fileNew, stackMinus, N, k, 'minus')
+                            for element in stackMinus:
+                                print(element, end='\n', file=deltaMinus)
+                            stackMinus.clear()
 
             for i in range(1, abs(N - O)):
                 if i % (10 ** 6) == 0:
-                    tmp_ = stackMinus.difference(stackPlus)
-                    stackPlus.difference_update(stackMinus)
-                    stackMinus = tmp_.copy()
-                    tmp_.clear()
+                    ins_ = stackMinus.intersection(stackPlus)
+                    stackMinus.difference_update(ins_)
+                    stackPlus.difference_update(ins_)
+                    ins_.clear()
                 if N > O:
-                    elemN = int(txtNEW.readline())
+                    elemN = setFormat(txtNEW.readline())
                     stackPlus.add(elemN)
                 else:
-                    elemO = int(txtOLD.readline())
+                    elemO = setFormat(txtOLD.readline())
                     stackMinus.add(elemO)
-                # Защита от переполнения RAM
-                if len(stackPlus) > blocksize:
-                    stackPlus = calcSkip('./backup/' + fileOld, stackPlus, O,  k, 'plus')
-                    for element in stackPlus:
-                        print(element, end='\n', file=deltaPlus)
-                    stackPlus.clear()
-                if len(stackMinus) > blocksize:
-                    stackMinus = calcSkip(fileNew, stackMinus, N, k, 'minus')
-                    for element in stackMinus:
-                        print(element, end='\n', file=deltaMinus)
-                    stackMinus.clear()
+                    # Защита от переполнения RAM
+                    if len(stackPlus) + len(stackMinus) > 2*blocksize:
+                        skip_flg = True
+                        if len(stackPlus) > len(stackMinus):
+                            stackPlus = calcSkip('./backup/' + fileOld, stackPlus, O,  k, 'plus')
+                            for element in stackPlus:
+                                print(element, end='\n', file=deltaPlus)
+                            stackPlus.clear()
+                        else:
+                            stackMinus = calcSkip(fileNew, stackMinus, N, k, 'minus')
+                            for element in stackMinus:
+                                print(element, end='\n', file=deltaMinus)
+                            stackMinus.clear()
 
-            tmp_ = stackMinus.difference(stackPlus)
-            stackPlus.difference_update(stackMinus)
-            stackMinus = tmp_.copy()
-            tmp_.clear()
+            ins_ = stackMinus.intersection(stackPlus)
+            stackMinus.difference_update(ins_)
+            stackPlus.difference_update(ins_)
+            ins_.clear()
+            if skip_flg:
+                stackPlus = calcSkip('./backup/' + fileOld, stackPlus, O,  k, 'plus')
+                stackMinus = calcSkip(fileNew, stackMinus, N, k, 'minus')
 
             print('Calculated! Writing delta to files.')
             logging('Calculated! Writing delta to files.')
@@ -328,34 +374,34 @@ def calcDeltaStable(fileOld, fileNew, N):
         with open(fileNew, 'r') as txtNEW:
             for i in range(0, parts):
                 for k, line in enumerate(txtNEW):
-                    setNew.add(int(line))
+                    setNew.add(setFormat(line))
                     if k == part - 1: break
                 with open('./backup/' + fileOld, 'r') as txtOLD:
                     for n in range(0, i * part):
-                        txtOLD.readline()
+                        next(txtOLD)
                     if n: print('Skipped', n)
                     for k, line in enumerate(txtOLD):
-                        setOld.add(int(line))
+                        setOld.add(setFormat(line))
                         if k % part == 0 and k > 0:
                             setNew.difference_update(setOld)
                             setOld.clear()
-                            print('Checked:', k)
+                            print('Checked:', k, end='\r')
                             if len(setNew) == 0: break
                     if len(setNew) > 0:
                         print('Jump to start of file')
                         txtOLD.seek(0)
                         for k, line in enumerate(txtOLD):
-                            setOld.add(int(line))
+                            setOld.add(setFormat(line))
                             if k % part == 0 and k > 0:
                                 setNew.difference_update(setOld)
                                 setOld.clear()
-                                print('Checked:', N - n + k)
+                                print('Checked:', N - n + k, end='\r')
                                 if len(setNew) == 0 or k > n: break
                     if len(setNew) > 0 and len(setOld) > 0:
                         setNew.difference_update(setOld) # проверяем оставшиеся записи
                 setOld.clear()
-                for line in setNew:
-                    print(line, end='\n', file=deltaPlus)
+                for elem in setNew:
+                    print(elem, end='\n', file=deltaPlus)
                 setNew.clear()
         print('Delta Minus computing')
         logging('Delta Minus computing')
@@ -363,34 +409,34 @@ def calcDeltaStable(fileOld, fileNew, N):
         with open('./backup/' + fileOld, 'r') as txtOLD:
             for i in range(0, parts):
                 for k, line in enumerate(txtOLD):
-                    setOld.add(int(line))
+                    setOld.add(setFormat(line))
                     if k == part - 1: break
                 with open(fileNew, 'r') as txtNEW:
                     for n in range(0, i * part):
-                        txtNEW.readline()
+                        next(txtNEW)
                     if n: print('Skipped', n)
                     for k, line in enumerate(txtNEW):
-                        setNew.add(int(line))
+                        setNew.add(setFormat(line))
                         if k % part == 0 and k > 0:
                             setOld.difference_update(setNew)
                             setNew.clear()
-                            print('Checked:', k)
+                            print('Checked:', k, end='\r')
                             if len(setOld) == 0: break
                     if len(setOld) > 0:
                         print('Jump to start of file')
                         txtNEW.seek(0)
                         for k, line in enumerate(txtNEW):
-                            setNew.add(int(line))
+                            setNew.add(setFormat(line))
                             if k % part == 0 and k > 0:
                                 setOld.difference_update(setNew)
                                 setNew.clear()
-                                print('Checked:', N - n + k)
+                                print('Checked:', N - n + k, end='\r')
                                 if len(setOld) == 0 or k > n: break
                     if len(setNew) > 0 and len(setOld) > 0:
                         setOld.difference_update(setNew)  # проверяем оставшиеся записи
                 setNew.clear()
-                for line in setOld:
-                    print(line, end='\n', file=deltaMinus)
+                for elem in setOld:
+                    print(elem, end='\n', file=deltaMinus)
                 setOld.clear()
     print('Compared!')
     logging('Compared!')
@@ -406,6 +452,8 @@ def init():
         os.mkdir('./backup')
     if not os.path.isdir('./delta'):
         os.mkdir('./delta')
+    if not os.path.isdir('./kronos'):
+        os.mkdir('./kronos')
     if not os.path.isdir('./log'):
         os.mkdir('./log')
     if not os.path.exists('./log/log' + postfix):
@@ -430,36 +478,37 @@ def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.cs
     print('Postprocessing')
     logging('Postprocessing', 1)
 
+    # Перенесет файлы, если они существуют, с заменой
+    def softmove(loc, dist):
+        if os.path.exists(dist + loc) and os.path.exists(loc):
+            os.remove(dist + loc)
+        if os.path.exists(loc):
+            os.rename(loc, dist + loc)
+    
     # Переносим файлы в бэкап и дельту с заменой
-    if os.path.exists('./backup/' + parsed_file) and os.path.exists(parsed_file):
-        os.remove('./backup/' + parsed_file)
-    if os.path.exists('./delta/deltaPlus' + postfix) and os.path.exists('deltaPlus' + postfix):
-        os.remove('./delta/deltaPlus' + postfix)
-    if os.path.exists('./delta/deltaMinus' + postfix) and os.path.exists('deltaMinus' + postfix):
-        os.remove('./delta/deltaMinus' + postfix)
-    if os.path.exists(parsed_file):
-        os.rename(parsed_file, './backup/' + parsed_file)
-    if os.path.exists('deltaPlus' + postfix):
-        os.rename('deltaPlus' + postfix, './delta/deltaPlus' + postfix)
-    if os.path.exists('deltaMinus' + postfix):
-        os.rename('deltaMinus' + postfix, './delta/deltaMinus' + postfix)
+    softmove(parsed_file, './backup/')
+    softmove('deltaPlus' + postfix, './delta/')
+    softmove('deltaMinus' + postfix, './delta/')
+    softmove('kronos_add' + postfix, './kronos/')
+    softmove('kronos_del' + postfix, './kronos/')
 
-    # Удаляем самый старый бэкап, если > 3
-    f = []
-    for root, dirs, files in os.walk('./backup'):
-        f.extend(files)
-        break
-    if len(f) > 3 and os.path.exists('./backup/' + first_backup):
-        os.remove('./backup/' + first_backup)
-        print('./backup/' + first_backup + ' removed')
-        logging('./backup/' + first_backup + ' removed', 1)
-
-    # Очистка work directory
     if clean_finish:
-        os.remove(compressfile)
-        os.remove(file)
-        print(compressfile + ' and ' + file + ' removed')
-        logging(compressfile + ' and ' + file + ' removed', 1)
+        # Удаляем самый старый бэкап, если > 3
+        f = []
+        for root, dirs, files in os.walk('./backup'):
+            f.extend(files)
+            break
+        if len(f) > 3 and os.path.exists('./backup/' + first_backup):
+            os.remove('./backup/' + first_backup)
+            print('./backup/' + first_backup + ' removed')
+            logging('./backup/' + first_backup + ' removed', 1)
+
+        # Очистка work directory
+        
+            os.remove(compressfile)
+            os.remove(file)
+            print(compressfile + ' and ' + file + ' removed')
+            logging(compressfile + ' and ' + file + ' removed', 1)
     logging('# ----------------------------------------------------------------------------------------- #', 1)
 
 
@@ -485,6 +534,10 @@ def main():
             calcDeltaFast(backup_file, parsed_file, num_passports)
         else:  # stable
             calcDeltaStable(backup_file, parsed_file, num_passports)
+        # Конвертирование в формат Кроноса        
+        if kronos:
+            formatKronos('deltaPlus' + postfix, 'kronos_add')
+            formatKronos('deltaMinus' + postfix, 'kronos_del')
 
     t1 = time.time()
     print('Parser ended!')
@@ -493,8 +546,12 @@ def main():
     logging('Time: ' + str('{:g}'.format((t1 - t0) // 60)) + 'm ' + str('{:.0f}'.format((t1 - t0) % 60)) + 's', 1)
 
     # Постобработка - завершение
-    postprocessing(parsed_file, first_backup, file, compressfile)
+    # postprocessing(parsed_file, first_backup, file, compressfile)
 
 
 if __name__ == '__main__':
     main()
+    # with open('./backup/list_of_expired_passports_20180831.txt', 'r') as r, open('list_of_expired_passports_20180830.txt', 'w') as w:
+    #     for i in range(0, 12*10**6):
+    #         w.write(r.readline())
+
