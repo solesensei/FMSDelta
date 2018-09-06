@@ -40,6 +40,7 @@ fformat = '.txt'
 postfix = datetime.today().strftime('%Y%m%d')  # _date.fformat
 # Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
 delta_method = 'flow'  # 'onepass' / 'stable' / 'flow'
+delta_type = 'plus'  # 'plus' / 'minus' / 'all' 
 # Количество используемой оперативной памяти. Связано с размером блока паспортов.
 ram_use = '2GB' # [MB|GB] exm: '2GB 700MB' 
 
