@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v1.7                                                      #
+# Версия: v1.8                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -239,26 +239,6 @@ def setFormat(line):
     return int(line)
 
 
-# Для calcDeltaOnePass. Если дельта > 1гб сравнить до конца файла.
-def calcSkip(file, stack, N, start_from, t):
-    print('Delta ' + t + ' is too big, comparing to the end of file')
-    logging('Delta ' + t + ' is too big, comparing to the end of file')
-    n = 0
-    with open(file, 'r') as txt:
-        for line in txt:
-            n += 1
-            elem = setFormat(line)
-            if elem in stack:
-                stack.remove(elem)
-                if len(stack) == 0:
-                    break
-            if n % 10**5 == 0:
-                print(N - n, end='\r')
-    print('Cleared to the end: delta', t)
-    logging('Cleared to the end: delta ' + t)
-    return stack
-
-
 # Вычисление дельты (только инкремент) ~ 6 мин
 # fileOld - предыдущая версия
 # fileNew - новая версия
@@ -320,6 +300,26 @@ def caclDeltaFlow(fileOld, fileNew, N):
 # fileNew - новая версия
 # N - количество людей в новой базе
 def calcDeltaOnePass(fileOld, fileNew, N):
+
+    # Если дельта > 1гб сравнить до конца файла.
+    def calcSkip(file, stack, N, start_from, t):
+        print('Delta ' + t + ' is too big, comparing to the end of file')
+        logging('Delta ' + t + ' is too big, comparing to the end of file')
+        n = 0
+        with open(file, 'r') as txt:
+            for line in txt:
+                n += 1
+                elem = setFormat(line)
+                if elem in stack:
+                    stack.remove(elem)
+                    if len(stack) == 0:
+                        break
+                if n % 10**5 == 0:
+                    print(N - n, end='\r')
+        print('Cleared to the end: delta', t)
+        logging('Cleared to the end: delta ' + t)
+        return stack
+
     print('Delta One Pass started!')
     logging('Delta One Pass started!')
     print('Comparing:', fileOld, fileNew)
@@ -419,25 +419,23 @@ def calcDeltaOnePass(fileOld, fileNew, N):
 # fileNew - новая версия
 # N - количество людей в новой базе
 def calcDeltaStable(fileOld, fileNew, N):
-    print('Delta Stable started!')
-    logging('Delta Stable started!')
-    print('Comparing:', fileOld, fileNew)
-    logging('Comparing: ' + fileOld + ' ' + fileNew)  
-    part = N if N <= blocksize else blocksize
-    parts = N // part + 1
-    n = 0
-    setOld = set()
-    setNew = set()
-    if delta_type == 'plus' or delta_type == 'all':
-        with open('deltaPlus' + postfix, 'w') as deltaPlus:
+    
+    # Функция сравнения
+    def compare(delta, file1, file2):
+        part = N if N <= blocksize else blocksize
+        parts = N // part + 1
+        setOld = set()
+        setNew = set()
+        n = 0
+        with open(delta, 'w') as deltaFile:
             print('Delta Plus computing')
             logging('Delta Plus computing')
-            with open(fileNew, 'r') as txtNEW:
+            with open(file1, 'r') as txtNEW:
                 for i in range(0, parts):
                     for k, line in enumerate(txtNEW):
                         setNew.add(setFormat(line))
                         if k == part - 1: break
-                    with open('./backup/' + fileOld, 'r') as txtOLD:
+                    with open(file2, 'r') as txtOLD:
                         for n in range(0, i * part):
                             next(txtOLD)
                         if n: print('Skipped', n)
@@ -462,45 +460,18 @@ def calcDeltaStable(fileOld, fileNew, N):
                             setNew.difference_update(setOld) # проверяем оставшиеся записи
                     setOld.clear()
                     for elem in setNew:
-                        print(elem, end='\n', file=deltaPlus)
+                        print(elem, end='\n', file=deltaFile)
                     setNew.clear()
+
+    print('Delta Stable started!')
+    logging('Delta Stable started!')
+    print('Comparing:', fileOld, fileNew)
+    logging('Comparing: ' + fileOld + ' ' + fileNew)  
+    # Вычисление дельты с delta_type
+    if delta_type == 'plus' or delta_type == 'all':
+        compare('deltaPlus' + postfix, fileNew, './backup/' + fileOld)
     if delta_type == 'minus' or delta_type == 'all':
-        with open('deltaMinus' + postfix, 'w') as deltaMinus:            
-            print('Delta Minus computing')
-            logging('Delta Minus computing')
-            n = 0
-            with open('./backup/' + fileOld, 'r') as txtOLD:
-                for i in range(0, parts):
-                    for k, line in enumerate(txtOLD):
-                        setOld.add(setFormat(line))
-                        if k == part - 1: break
-                    with open(fileNew, 'r') as txtNEW:
-                        for n in range(0, i * part):
-                            next(txtNEW)
-                        if n: print('Skipped', n)
-                        for k, line in enumerate(txtNEW):
-                            setNew.add(setFormat(line))
-                            if k % part == 0 and k > 0:
-                                setOld.difference_update(setNew)
-                                setNew.clear()
-                                print('Checked:', k, end='\r')
-                                if len(setOld) == 0: break
-                        if len(setOld) > 0:
-                            print('Jump to start of file')
-                            txtNEW.seek(0)
-                            for k, line in enumerate(txtNEW):
-                                setNew.add(setFormat(line))
-                                if k % part == 0 and k > 0:
-                                    setOld.difference_update(setNew)
-                                    setNew.clear()
-                                    print('Checked:', N - n + k, end='\r')
-                                    if len(setOld) == 0 or k > n: break
-                        if len(setNew) > 0 and len(setOld) > 0:
-                            setOld.difference_update(setNew)  # проверяем оставшиеся записи
-                    setNew.clear()
-                    for elem in setOld:
-                        print(elem, end='\n', file=deltaMinus)
-                    setOld.clear()
+        compare('deltaMinus' + postfix, './backup/' + fileOld, fileNew)
     print('Compared!')
     logging('Compared!')
 
@@ -515,7 +486,7 @@ def calcDelta(backup_file, parsed_file, num_passports):
         caclDeltaFlow(backup_file, parsed_file, num_passports)
 
 
-# Функция инициализации. При первичной настройке
+# Функция инициализации.
 def init():
     # Изменение постфикса
     global postfix, delta_type
@@ -600,6 +571,7 @@ def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.cs
     logging('# ----------------------------------------------------------------------------------------- #', 1)
 
 
+# Тело основной программы
 def main():
     print('Starts passports parser!')
     t0 = time.time()
