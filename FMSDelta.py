@@ -29,7 +29,7 @@ fformat = '.txt'
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 postfix = datetime.today().strftime('%Y%m%d')  # _date.fformat
 # Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
-delta_type = 'stable'  # 'onepass' / 'stable' / 'flow'
+delta_method = 'onepass'  # 'onepass' / 'stable' / 'flow'
 # Количество используемой оперативной памяти. Связано с размером блока паспортов.
 ram_use = '2GB' # [MB|GB] exm: '2GB 700MB' 
 # ОКАТО коды регионов
@@ -504,11 +504,11 @@ def calcDeltaStable(fileOld, fileNew, N):
 
 # Выбирает метод вычисления дельты
 def calcDelta(backup_file, parsed_file, num_passports):
-    if delta_type == 'onepass':
+    if delta_method == 'onepass':
         calcDeltaOnePass(backup_file, parsed_file, num_passports)
-    elif delta_type == 'stable':
+    elif delta_method == 'stable':
         calcDeltaStable(backup_file, parsed_file, num_passports)
-    elif delta_type == 'flow':
+    elif delta_method == 'flow':
         caclDeltaFlow(backup_file, parsed_file, num_passports)
 
 
@@ -534,14 +534,14 @@ def init():
     logging('New log starts: ' + datetime.today().strftime('%d/%m/%y %H:%M'), 1)
     logging('------------ Variables ------------', 1)
     logging('Start type: ' + ('pure' if pure_start else 'not pure'), 1)
-    logging('Delta calculation type: ' + delta_type, 1)
+    logging('Delta calculation method: ' + delta_method, 1)
     logging('Postfix style: ' + postfix, 1)
     logging('-----------------------------------', 1)
-    if not delta_type in ('stable', 'onepass', 'flow'):
-        print('delta_type error: \'stable\' or \'onepass\' or \'flow\' expected! Abort.')
-        logging('delta_type error: \'stable\' or \'onepass\' or \'flow\' expected! Abort.')
+    if not delta_method in ('stable', 'onepass', 'flow'):
+        print('delta_method error: \'stable\' or \'onepass\' or \'flow\' expected! Abort.')
+        logging('delta_method error: \'stable\' or \'onepass\' or \'flow\' expected! Abort.')
         exit()
-    print('Delta:', delta_type)
+    print('Delta:', delta_method)
     toBlock(ram_use)    
 
 # Функция завершения. Перенос файлов и очистка директории

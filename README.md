@@ -39,7 +39,7 @@ fformat = '.txt'
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 postfix = datetime.today().strftime('%Y%m%d')  # _date.fformat
 # Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
-delta_type = 'flow'  # 'onepass' / 'stable' / 'flow'
+delta_method = 'flow'  # 'onepass' / 'stable' / 'flow'
 # Количество используемой оперативной памяти. Связано с размером блока паспортов.
 ram_use = '2GB' # [MB|GB] exm: '2GB 700MB' 
 
@@ -76,9 +76,9 @@ pyinstaller --onefile FMSDelta.py
 -kronos/ # директория с файлами в формате для загрузки в Cинопсис, неограниченное количество
 FMSDelta.py # скрипт
 init.exe # executable файл скрипта для первичного запуска, с параметром % pure_start = 1 %
-delta_onepass.exe # executable файл скрипта, с параметром % delta_type = 'onepass' %
-delta_stable.exe # executable файл скрипта, с параметром % delta_type = 'stable' %
-delta_flow.exe # executable файл скрипта, с параметром % delta_type = 'flow' %
+delta_onepass.exe # executable файл скрипта, с параметром % delta_method = 'onepass' %
+delta_stable.exe # executable файл скрипта, с параметром % delta_method = 'stable' %
+delta_flow.exe # executable файл скрипта, с параметром % delta_method = 'flow' %
 brokenData.txt # текстовый файл, полученный в результате парсинга реестра, содержит битые данные
 README.md # этот текстовый документ
 ```
