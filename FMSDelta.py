@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v1.6                                                      #
+# Версия: v1.7                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -29,11 +29,11 @@ fformat = '.txt'
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 postfix = datetime.today().strftime('%Y%m%d')  # _date.fformat
 # Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
-delta_type = 'stable'  # 'fast' / 'stable'
+delta_type = 'stable'  # 'onepass' / 'stable' / 'flow'
 # Количество используемой оперативной памяти. Связано с размером блока паспортов.
-ram_use = '200MB' # [MB|GB] exm: '2GB 700MB' 
+ram_use = '2GB' # [MB|GB] exm: '2GB 700MB' 
 # ОКАТО коды регионов
-okato_codes = [1, 3, 4, 5, 7, 8, 11, 12, 14, 15, 17, 19, 20, 22, 24, 25, 26, 27, 28, 29, 32, 33, 34, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
+# okato_codes = [1, 3, 4, 5, 7, 8, 11, 12, 14, 15, 17, 19, 20, 22, 24, 25, 26, 27, 28, 29, 32, 33, 34, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
 
 # ------------------------------------------------------------------------------------- #
 
@@ -238,7 +238,7 @@ def setFormat(line):
     return int(line)
 
 
-# Для calcDeltaFast. Если дельта > 1гб сравнить до конца файла.
+# Для calcDeltaOnePass. Если дельта > 1гб сравнить до конца файла.
 def calcSkip(file, stack, N, start_from, t):
     print('Delta ' + t + ' is too big, comparing to the end of file')
     logging('Delta ' + t + ' is too big, comparing to the end of file')
@@ -257,18 +257,28 @@ def calcSkip(file, stack, N, start_from, t):
     logging('Cleared to the end: delta ' + t)
     return stack
 
-def calcDeltaRAM(fileOld, fileNew, N):
+
+# Вычисление дельты (только инкремент) ~ 6 мин
+# fileOld - предыдущая версия
+# fileNew - новая версия
+# N - количество людей в новой базе
+def caclDeltaFlow(fileOld, fileNew, N):
+    print('Delta Flow started!')
+    logging('Delta Flow started!')
+    print('Comparing:', fileOld, fileNew)
+    logging('Comparing: ' + fileOld + ' ' + fileNew)
     stackN = set()
-    stackO = set()
-    with open('deltaPlus' + postfix, 'w') as deltaPlus, open('deltaMinus' + postfix, 'w') as deltaMinus:
+    tmp_ = set()
+    with open('deltaPlus' + postfix, 'w') as deltaPlus:
         k = 0
         n = 0
         with open(fileNew, 'r') as txtNEW:
             for lineN in txtNEW:
                 n += 1
+                stackN.add(setFormat(lineN))
                 if len(stackN) > blocksize:
                     k += 1
-                    print('Next block:', k, n)
+                    print('Next block:', k, 'Passports:', n)
                     with open('./backup/' + fileOld, 'r') as txtOLD:
                         for lineO in txtOLD:
                             elemO = setFormat(lineO)
@@ -278,16 +288,39 @@ def calcDeltaRAM(fileOld, fileNew, N):
                                 n += 1
                                 if not lineN: 
                                     break
-                                stackN.add(setFormat(lineN))
-                else:
-                    stackN.add(setFormat(lineN))
-
+                                tmp_.add(setFormat(lineN))
+                            elif elemO in tmp_:
+                                tmp_.remove(elemO)
+                                lineN = txtNEW.readline()
+                                n += 1
+                                if not lineN: 
+                                    break
+                                tmp_.add(setFormat(lineN))
+                    for elemO in stackN:
+                        print(elemO, end='\n', file=deltaPlus)
+                    stackN.clear()
+                    stackN.update(tmp_)
+                    tmp_.clear()
+            stackN.update(tmp_)
+            tmp_.clear()
+            with open('./backup/' + fileOld, 'r') as txtOLD:
+                for lineO in txtOLD:
+                    elemO = setFormat(lineO)
+                    if elemO in stackN:
+                        stackN.remove(elemO)
+        for elemO in stackN:
+            print(elemO, end='\n', file=deltaPlus)
+        stackN.clear()
+    print('Compared!')
+    logging('Compared!')
             
 # Вычисление дельты (быстрая версия, 1 прогон) ~ 5 мин
 # fileOld - предыдущая версия
 # fileNew - новая версия
 # N - количество людей в новой базе
-def calcDeltaFast(fileOld, fileNew, N):
+def calcDeltaOnePass(fileOld, fileNew, N):
+    print('Delta One Pass started!')
+    logging('Delta One Pass started!')
     print('Comparing:', fileOld, fileNew)
     logging('Comparing: ' + fileOld + ' ' + fileNew)
     with open('./backup/' + fileOld, 'r') as fold:
@@ -380,11 +413,13 @@ def calcDeltaFast(fileOld, fileNew, N):
     logging('Compared!')
 
 
-# Вычисление дельты (универсальная версия, если дельта > 1гб) ~ 40 мин
+# Вычисление дельты (дельта > 1гб) ~ 40 мин
 # fileOld - предыдущая версия
 # fileNew - новая версия
 # N - количество людей в новой базе
 def calcDeltaStable(fileOld, fileNew, N):
+    print('Delta Stable started!')
+    logging('Delta Stable started!')
     print('Comparing:', fileOld, fileNew)
     logging('Comparing: ' + fileOld + ' ' + fileNew)
     with open('deltaPlus' + postfix, 'w') as deltaPlus, \
@@ -467,6 +502,16 @@ def calcDeltaStable(fileOld, fileNew, N):
     logging('Compared!')
 
 
+# Выбирает метод вычисления дельты
+def calcDelta(backup_file, parsed_file, num_passports):
+    if delta_type == 'onepass':
+        calcDeltaOnePass(backup_file, parsed_file, num_passports)
+    elif delta_type == 'stable':
+        calcDeltaStable(backup_file, parsed_file, num_passports)
+    elif delta_type == 'flow':
+        caclDeltaFlow(backup_file, parsed_file, num_passports)
+
+
 # Функция инициализации. При первичной настройке
 def init():
     # Изменение постфикса
@@ -492,10 +537,11 @@ def init():
     logging('Delta calculation type: ' + delta_type, 1)
     logging('Postfix style: ' + postfix, 1)
     logging('-----------------------------------', 1)
-    if delta_type != 'stable' and delta_type != 'fast':
-        print('delta_type error: \'stable\' or \'fast\' expected! Abort.')
-        logging('delta_type error: \'stable\' or \'fast\' expected! Abort.')
+    if not delta_type in ('stable', 'onepass', 'flow'):
+        print('delta_type error: \'stable\' or \'onepass\' or \'flow\' expected! Abort.')
+        logging('delta_type error: \'stable\' or \'onepass\' or \'flow\' expected! Abort.')
         exit()
+    print('Delta:', delta_type)
     toBlock(ram_use)    
 
 # Функция завершения. Перенос файлов и очистка директории
@@ -555,15 +601,13 @@ def main():
         # Получение имени предыдущей версии реестра для вычисления дельты
         first_backup, backup_file = getBackFile(file)
         # Сравнение старой и новой версии баз, выделение дельты
-        if delta_type == 'fast':
-            calcDeltaFast(backup_file, parsed_file, num_passports)
-        else:  # stable
-            calcDeltaRAM(backup_file, parsed_file, num_passports)
-            # calcDeltaStable(backup_file, parsed_file, num_passports)
+        calcDelta(backup_file, parsed_file, num_passports)
         # Конвертирование в формат Кроноса        
         if kronos:
-            formatKronos('deltaPlus' + postfix, 'kronos_add')
-            formatKronos('deltaMinus' + postfix, 'kronos_del')
+            if os.path.exists('deltaPlus' + postfix):
+                formatKronos('deltaPlus' + postfix, 'kronos_add')
+            if os.path.exists('deltaMinus' + postfix):
+                formatKronos('deltaMinus' + postfix, 'kronos_del')
 
     t1 = time.time()
     print('Parser ended!')
@@ -572,12 +616,8 @@ def main():
     logging('Time: ' + str('{:g}'.format((t1 - t0) // 60)) + 'm ' + str('{:.0f}'.format((t1 - t0) % 60)) + 's', 1)
 
     # Постобработка - завершение
-    # postprocessing(parsed_file, first_backup, file, compressfile)
+    postprocessing(parsed_file, first_backup, file, compressfile)
 
 
 if __name__ == '__main__':
     main()
-    # with open('./backup/list_of_expired_passports_20180831.txt', 'r') as r, open('list_of_expired_passports_20180830.txt', 'w') as w:
-    #     for i in range(0, 12*10**6):
-    #         w.write(r.readline())
-
