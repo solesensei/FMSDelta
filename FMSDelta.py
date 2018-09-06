@@ -9,10 +9,12 @@
 
 import sys
 import time
-from datetime import datetime
 import requests  # pip3 install requests
 import bz2
 import os
+import multiprocessing as mp
+from datetime import datetime
+from functools import partial
 
 # ------------------------------ Динамические переменные ------------------------------ #
 
@@ -294,7 +296,8 @@ def caclDeltaFlow(fileOld, fileNew, N):
         stackN.clear()
     print('Compared!')
     logging('Compared!')
-            
+
+
 # Вычисление дельты (быстрая версия, 1 прогон) ~ 5 мин
 # fileOld - предыдущая версия
 # fileNew - новая версия
@@ -421,47 +424,53 @@ def calcDeltaOnePass(fileOld, fileNew, N):
 def calcDeltaStable(fileOld, fileNew, N):
     
     # Функция сравнения
-    def compare(delta, file1, file2):
+    def compare(np, delta, file1, file2):
         part = N if N <= blocksize else blocksize
         parts = N // part + 1
+        parrallel_part = int(N / 4 * np) # начало параллельного блока   
         setOld = set()
         setNew = set()
-        n = 0
-        with open(delta, 'w') as deltaFile:
-            print('Delta Plus computing')
-            logging('Delta Plus computing')
-            with open(file1, 'r') as txtNEW:
-                for i in range(0, parts):
-                    for k, line in enumerate(txtNEW):
-                        setNew.add(setFormat(line))
-                        if k == part - 1: break
-                    with open(file2, 'r') as txtOLD:
-                        for n in range(0, i * part):
-                            next(txtOLD)
-                        if n: print('Skipped', n)
+        n = 0       
+        with open(file1, 'r') as txtNEW:
+            for i in range(0, parts):
+                for k, line in enumerate(txtNEW):
+                    setNew.add(setFormat(line))
+                    if k == part - 1: break
+                with open(file2, 'r') as txtOLD:
+                    for n in range(0, i * part):
+                        next(txtOLD)
+                    if n: print('Skipped', n)
+                    for k, line in enumerate(txtOLD):
+                        setOld.add(setFormat(line))
+                        if k % part == 0 and k > 0:
+                            setNew.difference_update(setOld)
+                            setOld.clear()
+                            print('Checked:', k, end='\r')
+                            if len(setNew) == 0: break
+                    if len(setNew) > 0:
+                        print('Jump to start of file')
+                        txtOLD.seek(0)
                         for k, line in enumerate(txtOLD):
                             setOld.add(setFormat(line))
                             if k % part == 0 and k > 0:
                                 setNew.difference_update(setOld)
                                 setOld.clear()
-                                print('Checked:', k, end='\r')
-                                if len(setNew) == 0: break
-                        if len(setNew) > 0:
-                            print('Jump to start of file')
-                            txtOLD.seek(0)
-                            for k, line in enumerate(txtOLD):
-                                setOld.add(setFormat(line))
-                                if k % part == 0 and k > 0:
-                                    setNew.difference_update(setOld)
-                                    setOld.clear()
-                                    print('Checked:', N - n + k, end='\r')
-                                    if len(setNew) == 0 or k > n: break
-                        if len(setNew) > 0 and len(setOld) > 0:
-                            setNew.difference_update(setOld) # проверяем оставшиеся записи
-                    setOld.clear()
-                    for elem in setNew:
-                        print(elem, end='\n', file=deltaFile)
-                    setNew.clear()
+                                print('Checked:', N - n + k, end='\r')
+                                if len(setNew) == 0 or k > n: break
+                    if len(setNew) > 0 and len(setOld) > 0:
+                        setNew.difference_update(setOld) # проверяем оставшиеся записи
+                setOld.clear()
+                return setNew    
+    
+    def compare_parrallel(delta, file1, file2):
+        pool = mp.Pool(processes=4)
+        compare_args = partial(compare, delta=delta, file1=file1, file2=file2)
+        with open(delta, 'w') as deltaFile:
+            print('Delta ' + delta + ' computing')
+            logging('Delta ' + delta + ' computing')
+            for stack in pool.imap(compare_args, range(0,4)):
+                for elem in stack:
+                    print(elem, end='\n', file=deltaFile)
 
     print('Delta Stable started!')
     logging('Delta Stable started!')
@@ -469,9 +478,9 @@ def calcDeltaStable(fileOld, fileNew, N):
     logging('Comparing: ' + fileOld + ' ' + fileNew)  
     # Вычисление дельты с delta_type
     if delta_type == 'plus' or delta_type == 'all':
-        compare('deltaPlus' + postfix, fileNew, './backup/' + fileOld)
+        compare_parrallel('deltaPlus' + postfix, fileNew, './backup/' + fileOld)
     if delta_type == 'minus' or delta_type == 'all':
-        compare('deltaMinus' + postfix, './backup/' + fileOld, fileNew)
+        compare_parrallel('deltaMinus' + postfix, './backup/' + fileOld, fileNew)
     print('Compared!')
     logging('Compared!')
 
@@ -532,6 +541,7 @@ def init():
     print('Delta type:', delta_type)
     # Перевод переменной оперативной памяти в размер блока чтения в строках
     toBlock(ram_use)    
+
 
 # Функция завершения. Перенос файлов и очистка директории
 def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.csv', compressfile='list_of_expired_passports.csv.bz2'):
@@ -608,6 +618,11 @@ def main():
     # Постобработка - завершение
     postprocessing(parsed_file, first_backup, file, compressfile)
 
+# def compare(np, delta, file1, file2):
+    # print(np, delta, file1, file2)
 
 if __name__ == '__main__':
     main()
+    # pool = mp.Pool(processes=4)
+    # compare_arg = partial(compare, file1='file1', file2='file2', np=1)
+    # pool.map(compare_arg, range(0,4))
