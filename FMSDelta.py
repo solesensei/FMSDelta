@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v1.8                                                      #
+# Версия: v1.9                                                      #
 # ----------------------------------------------------------------- #
 
 import sys
@@ -15,6 +15,7 @@ import os
 import multiprocessing as mp
 from datetime import datetime
 from functools import partial
+from math import ceil
 
 # ------------------------------ Динамические переменные ------------------------------ #
 
@@ -51,9 +52,10 @@ def isInteger(s):
 
 
 # Размер блока чтения (в строках). Больше значение - Больше расход RAM    
-blocksize = 10 * 10 ** 6 # 1200MB
+blocksize = 20 * 10 ** 6 # 1200MB
 # Переводит RAM в размер блока в строках
 def toBlock(ram):
+    global blocksize
     mblock = 600 # 5m ~ 600MB
     isGB = ram.find('GB')
     isMB = ram.find('MB')
@@ -65,7 +67,6 @@ def toBlock(ram):
         isGB = 1
     print('RAM USING:', ram)
     logging('RAM USING: ' + ram)
-    global blocksize
     sizeGB = 0
     sizeMB = 0
     if isGB != -1:
@@ -330,7 +331,6 @@ def calcDeltaOnePass(fileOld, fileNew, N):
     with open('./backup/' + fileOld, 'r') as fold:
         print('Counting passports in', fileOld)
         O = sum(1 for i in fold)
-        O -= 1
     print('Counted! (' + str(O) + ')')
     logging('Counted passports in ' + fileOld + ' (' + str(O) + ')')
     less_num = N if N < O else O
@@ -371,18 +371,18 @@ def calcDeltaOnePass(fileOld, fileNew, N):
                                 print(element, end='\n', file=deltaMinus)
                             stackMinus.clear()
 
-            for i in range(1, abs(N - O)):
-                if i % (10 ** 6) == 0:
-                    ins_ = stackMinus.intersection(stackPlus)
-                    stackMinus.difference_update(ins_)
-                    stackPlus.difference_update(ins_)
-                    ins_.clear()
+            for i in range(0, abs(N - O)):
                 if N > O:
                     elemN = setFormat(txtNEW.readline())
                     stackPlus.add(elemN)
                 else:
                     elemO = setFormat(txtOLD.readline())
                     stackMinus.add(elemO)
+                if i % (10 ** 6) == 0:
+                    ins_ = stackMinus.intersection(stackPlus)
+                    stackMinus.difference_update(ins_)
+                    stackPlus.difference_update(ins_)
+                    ins_.clear()
                     # Защита от переполнения RAM
                     if len(stackPlus) + len(stackMinus) > 2*blocksize:
                         skip_flg = True
@@ -417,60 +417,99 @@ def calcDeltaOnePass(fileOld, fileNew, N):
     logging('Compared!')
 
 
+# --------------------------------------- Параллельная обработка --------------------------------------- # 
+
+
+# Функция прослушивающая очередь и записывающая дельту в файл
+def writer(stackQueue, file):
+    print('Writer: starts!')
+    with open(file, 'w') as f:
+        while 1:
+            stack = stackQueue.get()
+            print('Writer: got message!')
+            if stack == 'exit':
+                break
+            print('Writer: write stack!')
+            for elem in stack:
+                print(elem, end='\n', file=f)
+            stack.clear()
+    print('Writer: finished!')
+    return
+
+
+# Функция многопропоточного сравнения блоков для calcDeltaStable, отправляет данные в очередь
+def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=3):
+    block = round((N if N <= blocksize else blocksize) / procs) # число строк в одном блоке
+    blocks = ceil(N / block) # число блоков в файле 
+    p_blocks = round(blocks / procs) # число блоков в обработке у каждого процесса 
+    p_start = p_blocks * block * np # начало параллельного блока (строка)   
+    print('Proc:', np + 1, 'Start from:', p_start)
+    stackO = set()
+    stackN = set()
+    k = 0
+    with open(file1, 'r') as fileN:
+        for i in range(0, p_start):
+            next(fileN)
+        for i in range(0, p_blocks):
+            print('Proc:', np + 1, 'Block:', i, '/', p_blocks)
+            for k, line in enumerate(fileN):
+                stackN.add(setFormat(line))
+                if k == block - 1: break
+            with open(file2, 'r') as fileO:
+                for k, line in enumerate(fileO):
+                    stackO.add(setFormat(line))
+                    if k % block == 0 and k > 0:
+                        stackN.difference_update(stackO)
+                        stackO.clear()
+                        if len(stackN) == 0: break
+                if len(stackN) > 0 and len(stackO) > 0:
+                    stackN.difference_update(stackO) # проверяем оставшиеся записи
+            stackO.clear()
+            print('Proc:', np + 1, 'Sending delta to writer!')
+            stackQueue.put(stackN)
+        # Оставшиеся строки обрабатывает последний процесс
+        if np == 3:
+            for line in fileN:
+                stackO.add(setFormat(line))
+            with open(file2, 'r') as fileO:
+                for line in fileO:
+                    elem = setFormat(line)
+                    if elem in stackO:
+                        stackO.remove(elem)
+            print('Proc:', np + 1, 'Sending delta to writer!')
+            stackQueue.put(stackO)                
+    print('Proc ended!:', np + 1)
+    return
+
+# ------------------------------------------------------------------------------------------------------ # 
+
 # Вычисление дельты (дельта > 1гб) ~ 40 мин
 # fileOld - предыдущая версия
 # fileNew - новая версия
 # N - количество людей в новой базе
 def calcDeltaStable(fileOld, fileNew, N):
     
-    # Функция сравнения
-    def compare(np, delta, file1, file2):
-        part = N if N <= blocksize else blocksize
-        parts = N // part + 1
-        parrallel_part = int(N / 4 * np) # начало параллельного блока   
-        setOld = set()
-        setNew = set()
-        n = 0       
-        with open(file1, 'r') as txtNEW:
-            for i in range(0, parts):
-                for k, line in enumerate(txtNEW):
-                    setNew.add(setFormat(line))
-                    if k == part - 1: break
-                with open(file2, 'r') as txtOLD:
-                    for n in range(0, i * part):
-                        next(txtOLD)
-                    if n: print('Skipped', n)
-                    for k, line in enumerate(txtOLD):
-                        setOld.add(setFormat(line))
-                        if k % part == 0 and k > 0:
-                            setNew.difference_update(setOld)
-                            setOld.clear()
-                            print('Checked:', k, end='\r')
-                            if len(setNew) == 0: break
-                    if len(setNew) > 0:
-                        print('Jump to start of file')
-                        txtOLD.seek(0)
-                        for k, line in enumerate(txtOLD):
-                            setOld.add(setFormat(line))
-                            if k % part == 0 and k > 0:
-                                setNew.difference_update(setOld)
-                                setOld.clear()
-                                print('Checked:', N - n + k, end='\r')
-                                if len(setNew) == 0 or k > n: break
-                    if len(setNew) > 0 and len(setOld) > 0:
-                        setNew.difference_update(setOld) # проверяем оставшиеся записи
-                setOld.clear()
-                return setNew    
-    
-    def compare_parrallel(delta, file1, file2):
-        pool = mp.Pool(processes=4)
-        compare_args = partial(compare, delta=delta, file1=file1, file2=file2)
-        with open(delta, 'w') as deltaFile:
-            print('Delta ' + delta + ' computing')
-            logging('Delta ' + delta + ' computing')
-            for stack in pool.imap(compare_args, range(0,4)):
-                for elem in stack:
-                    print(elem, end='\n', file=deltaFile)
+    # Подготовка к паралельной обработке
+    def compare_parallel(delta, file1, file2, procs=3):
+        print('Parallel processing starts! Processes=', procs)
+        logging('Parallel processing starts! Processes=' + str(procs))
+        print('Main: Pool creating!')
+        logging('Main: Pool creating!')
+        # Настройка
+        pool = mp.Pool(processes=procs + 1) # 1 - writer. остальные - обработка
+        manager = mp.Manager()
+        queue = manager.Queue()
+        # Подготовка аргументов для загрузки в delta_parallel
+        compare_args = partial(delta_parallel, delta=delta, file1=file1, file2=file2, stackQueue=queue, N=N, blocksize=blocksize, procs=procs)
+        # Создание процессов и обработка
+        w = pool.apply_async(writer, args=(queue, delta)) # процесс writer
+        print('Main: Wait for processes finished!')
+        pool.map(compare_args, range(0, procs)) # procs процесса сравнения 
+        print('Main: sending \'exit\' to writer!')        
+        queue.put('exit')
+        w.get() # ожидание завершения writer
+        pool.close()
+        print('Pool closed!')
 
     print('Delta Stable started!')
     logging('Delta Stable started!')
@@ -478,9 +517,9 @@ def calcDeltaStable(fileOld, fileNew, N):
     logging('Comparing: ' + fileOld + ' ' + fileNew)  
     # Вычисление дельты с delta_type
     if delta_type == 'plus' or delta_type == 'all':
-        compare_parrallel('deltaPlus' + postfix, fileNew, './backup/' + fileOld)
+        compare_parallel('deltaPlus' + postfix, fileNew, './backup/' + fileOld)
     if delta_type == 'minus' or delta_type == 'all':
-        compare_parrallel('deltaMinus' + postfix, './backup/' + fileOld, fileNew)
+        compare_parallel('deltaMinus' + postfix, './backup/' + fileOld, fileNew)
     print('Compared!')
     logging('Compared!')
 
@@ -618,11 +657,6 @@ def main():
     # Постобработка - завершение
     postprocessing(parsed_file, first_backup, file, compressfile)
 
-# def compare(np, delta, file1, file2):
-    # print(np, delta, file1, file2)
 
 if __name__ == '__main__':
     main()
-    # pool = mp.Pool(processes=4)
-    # compare_arg = partial(compare, file1='file1', file2='file2', np=1)
-    # pool.map(compare_arg, range(0,4))
