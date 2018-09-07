@@ -7,11 +7,8 @@
 # Версия: v1.9                                                      #
 # ----------------------------------------------------------------- #
 
-import sys
-import time
+import sys, time, bz2, os, argparse
 import requests  # pip3 install requests
-import bz2
-import os
 import multiprocessing as mp
 from datetime import datetime
 from functools import partial
@@ -24,7 +21,7 @@ fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports
 # Флаг запуска. Поставить 1 при первичном запуске. Скачивание + парсинг. Без дельты.
 pure_start = 0
 # Флаг завершения. По умолчанию очищает директорию от временных файлов и старых бэкапов.
-clean_finish = 1
+clean_finish = 0
 # Требуется ли загрузка в Кронос Синопсис
 kronos = 1
 # Формат файлов
@@ -32,7 +29,7 @@ fformat = '.txt'
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 postfix = datetime.today().strftime('%Y%m%d')  # _date.fformat
 # Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
-delta_method = 'flow'  # 'onepass' / 'stable' / 'flow'
+delta_method = 'stable'  # 'onepass' / 'stable' / 'flow'
 delta_type = 'plus'  # 'plus' / 'minus' / 'all' 
 # Количество используемой оперативной памяти. Связано с размером блока паспортов.
 ram_use = '2GB' # [MB|GB] exm: '2GB 700MB' 
@@ -438,7 +435,7 @@ def writer(stackQueue, file):
 
 
 # Функция многопропоточного сравнения блоков для calcDeltaStable, отправляет данные в очередь
-def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=3):
+def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=1):
     block = round((N if N <= blocksize else blocksize) / procs) # число строк в одном блоке
     blocks = ceil(N / block) # число блоков в файле 
     p_blocks = round(blocks / procs) # число блоков в обработке у каждого процесса 
@@ -534,10 +531,19 @@ def calcDelta(backup_file, parsed_file, num_passports):
         caclDeltaFlow(backup_file, parsed_file, num_passports)
 
 
+# Парсер параметров командной строки
+def usage():
+    parser = argparse.ArgumentParser(description='FMS Parser and Delta Calculator')
+    parser.add_argument('-m', metavar='method', help='Delta calculation method: \'stable\' or \'onepass\' or \'flow\'. Default: \'flow\'')
+    parser.add_argument('-t', metavar='type', help='Delta calcultation type:  \'plus\' or \'minus\' or \'all\'. Default: \'plus\'')
+    parser.add_argument('-r', metavar='ram', help='Set RAM limit for the program. exp: \'2GB500MB\'')
+    return parser.parse_args()
+
+
 # Функция инициализации.
 def init():
     # Изменение постфикса
-    global postfix, delta_type
+    global postfix, delta_type, args; args = usage()
     postfix = '_' + postfix + fformat
     # При первичном запуске создать папку backup, delta, log
     if not os.path.isdir('./backup'):
