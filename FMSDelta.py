@@ -534,8 +534,9 @@ def calcDelta(backup_file, parsed_file, num_passports):
 # Парсер параметров командной строки
 def usage():
     parser = argparse.ArgumentParser(description='FMS Parser and Delta Calculator')
-    parser.add_argument('-m', metavar='method', help='Delta calculation method: \'stable\' or \'onepass\' or \'flow\'. Default: \'flow\'')
-    parser.add_argument('-t', metavar='type', help='Delta calcultation type:  \'plus\' or \'minus\' or \'all\'. Default: \'plus\'')
+    parser.add_argument('--pure', help='Set for first run, just parsing, no delta', action='store_true')
+    parser.add_argument('-m', metavar='method', help='Delta calculation method: [stable|onepass|flow]. Default: \'flow\'')
+    parser.add_argument('-t', metavar='type', help='Delta calcultation type: [plus|minus|all]. Default: \'plus\'')
     parser.add_argument('-r', metavar='ram', help='Set RAM limit for the program. exp: \'2GB500MB\'')
     return parser.parse_args()
 
