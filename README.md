@@ -92,10 +92,7 @@ pyinstaller --onefile FMSDelta.py -n [name]
 -log/ # директория лог файлов, неограниченное количество
 -kronos/ # директория с файлами в формате для загрузки в Cинопсис, неограниченное количество
 FMSDelta.py # скрипт
-init.exe # executable файл скрипта для первичного запуска, с параметром % pure_start = 1 %
-delta_onepass.exe # executable файл скрипта, с параметром % delta_method = 'onepass' %
-delta_stable.exe # executable файл скрипта, с параметром % delta_method = 'stable' %
-delta_flow.exe # executable файл скрипта, с параметром % delta_method = 'flow' %
+delta.exe # executable файл
 brokenData.txt # текстовый файл, полученный в результате парсинга реестра, содержит битые данные
 README.md # этот текстовый документ
 ```
