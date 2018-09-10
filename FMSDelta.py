@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v1.9                                                      #
+# Версия: v2.0                                                      #
 # ----------------------------------------------------------------- #
 
 import sys, time, bz2, os, argparse
@@ -21,7 +21,7 @@ fms_url = 'http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports
 # Флаг запуска. Поставить 1 при первичном запуске. Скачивание + парсинг. Без дельты.
 pure_start = 0
 # Флаг завершения. По умолчанию очищает директорию от временных файлов и старых бэкапов.
-clean_finish = 0
+clean_finish = 1
 # Требуется ли загрузка в Кронос Синопсис
 kronos = 1
 # Формат файлов
@@ -29,7 +29,7 @@ fformat = '.txt'
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 postfix = datetime.today().strftime('%Y%m%d')  # _date.fformat
 # Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
-delta_method = 'stable'  # 'onepass' / 'stable' / 'flow'
+delta_method = 'flow'  # 'onepass' / 'stable' / 'flow'
 delta_type = 'plus'  # 'plus' / 'minus' / 'all' 
 # Количество используемой оперативной памяти. Связано с размером блока паспортов.
 ram_use = '2GB' # [MB|GB] exm: '2GB 700MB' 
@@ -448,7 +448,7 @@ def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=1):
         for i in range(0, p_start):
             next(fileN)
         for i in range(0, p_blocks):
-            print('Proc:', np + 1, 'Block:', i, '/', p_blocks)
+            print('Proc:', np + 1, 'Block:', i + 1, '/', p_blocks)
             for k, line in enumerate(fileN):
                 stackN.add(setFormat(line))
                 if k == block - 1: break
@@ -465,7 +465,8 @@ def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=1):
             print('Proc:', np + 1, 'Sending delta to writer!')
             stackQueue.put(stackN)
         # Оставшиеся строки обрабатывает последний процесс
-        if np == 3:
+        if np == procs:
+            print('Proc:', np + 1, 'Last pass processing!')
             for line in fileN:
                 stackO.add(setFormat(line))
             with open(file2, 'r') as fileO:
@@ -535,6 +536,7 @@ def calcDelta(backup_file, parsed_file, num_passports):
 def usage():
     parser = argparse.ArgumentParser(description='FMS Parser and Delta Calculator')
     parser.add_argument('--pure', help='Set for first run, just parsing, no delta', action='store_true')
+    parser.add_argument('--noclean', help='Set to leave directory unclean from temorary files', action='store_true')
     parser.add_argument('-m', metavar='method', help='Delta calculation method: [stable|onepass|flow]. Default: \'flow\'')
     parser.add_argument('-t', metavar='type', help='Delta calcultation type: [plus|minus|all]. Default: \'plus\'')
     parser.add_argument('-r', metavar='ram', help='Set RAM limit for the program. exp: \'2GB500MB\'')
@@ -543,9 +545,14 @@ def usage():
 
 # Функция инициализации.
 def init():
-    # Изменение постфикса
-    global postfix, delta_type, args; args = usage()
+    global postfix, ram_use, delta_method, pure_start, clean_finish, delta_type, args; args = usage()
+    # Редактирование глобальных переменных в зависимости от аргументов выставленных пользователем
     postfix = '_' + postfix + fformat
+    if args.pure: pure_start = 1
+    if args.noclean: clean_finish = 0
+    if args.m: delta_method = args.m
+    if args.t: delta_type = args.t
+    if args.r: ram_use = args.r
     # При первичном запуске создать папку backup, delta, log
     if not os.path.isdir('./backup'):
         os.mkdir('./backup')
@@ -566,6 +573,7 @@ def init():
     logging('Delta calculation method: ' + delta_method, 1)
     logging('Delta calculation type: ' + delta_type, 1)
     logging('Postfix style: ' + postfix, 1)
+    logging('Clean finish: ' + ('yes' if clean_finish else 'no'), 1)
     logging('-----------------------------------', 1)
     if not delta_method in ('stable', 'onepass', 'flow'):
         print('delta_method error: \'stable\' or \'onepass\' or \'flow\' expected! Abort.')
@@ -666,4 +674,5 @@ def main():
 
 
 if __name__ == '__main__':
+    mp.freeze_support() # фикс ошибки с pyinstaller и multiprocessing и argparser 
     main()

@@ -48,16 +48,32 @@ ram_use = '2GB' # [MB|GB] exm: '2GB 700MB'
 ```
 
 ## Запуск
-Для запуска скрипта необходимо выполнить следующую команду.
+Для запуска скрипта необходимо выполнить любую из следующих команд. (Подробнее по методам см. [таблицу](#предварительная-настройка))
 
+Первый запуск (инициализация)
 ```bash
-# using executable 
-init.exe # first run
-delta_onepass.exe # one pass, the fastest calcultations, for small delta
-delta_flow.exe # multiple pass, fast calculations, stable ram, (increment only)
-delta_stable.exe # stable calcultations, for any delta (increment)
-# using python 3.7
-python FMSDelta.py
+# using executable
+delta.exe --pure
+# using python3
+python FMSDelta.py --pure
+```
+
+Выбор метода подсчета дельты (`onepass`, `stable`, `flow`) с типами дельты (`plus`, `minus`, `all`)
+```bash
+# using executable
+delta.exe -m onepass -t all
+delta.exe -m stable -t minus
+delta.exe -m flow -t plus
+# same with python3
+python FMSDelta.py -m [method] -r [type]
+```
+
+Дополнительные команды в контекстном меню
+```bash
+# using executable
+delta.exe --help
+# using python3
+python FMSDelta.py --help
 ```
 
 ### Сбор executable файла
@@ -65,7 +81,7 @@ python FMSDelta.py
 ```bash
 # using pyinstaller and python3.6
 pip install pyinstaller
-pyinstaller --onefile FMSDelta.py
+pyinstaller --onefile FMSDelta.py -n [name]
 ```
 
 ## Результат
