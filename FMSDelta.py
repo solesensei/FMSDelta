@@ -493,7 +493,7 @@ def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=1):
 # N - количество людей в новой базе
 def calcDeltaStable(fileOld, fileNew, N):
     
-    # Подготовка к паралельной обработке
+    # Подготовка к параллельной обработке
     def compare_parallel(delta, file1, file2, procs=3):
         print('Parallel processing starts! Processes=', procs)
         logging('Parallel processing starts! Processes=' + str(procs))
