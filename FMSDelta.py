@@ -250,6 +250,7 @@ def caclDeltaFlow(fileOld, fileNew, N):
     logging('Comparing: ' + fileOld + ' ' + fileNew)
     stackN = set()
     tmp_ = set()
+    isEnded = False
     with open('deltaPlus' + postfix, 'w') as deltaPlus:
         k = 0
         n = 0
@@ -267,7 +268,8 @@ def caclDeltaFlow(fileOld, fileNew, N):
                                 stackN.remove(elemO)
                                 lineN = txtNEW.readline()
                                 n += 1
-                                if not lineN: 
+                                if not lineN:
+                                    isEnded = True
                                     break
                                 tmp_.add(setFormat(lineN))
                             elif elemO in tmp_:
@@ -275,13 +277,15 @@ def caclDeltaFlow(fileOld, fileNew, N):
                                 lineN = txtNEW.readline()
                                 n += 1
                                 if not lineN: 
+                                    isEnded = True
                                     break
                                 tmp_.add(setFormat(lineN))
-                    for elemO in stackN:
-                        print(elemO, end='\n', file=deltaPlus)
-                    stackN.clear()
-                    stackN.update(tmp_)
-                    tmp_.clear()
+                    if not isEnded:
+                        for elemO in stackN:
+                            print(elemO, end='\n', file=deltaPlus)
+                        stackN.clear()
+                        stackN.update(tmp_)
+                        tmp_.clear()
             stackN.update(tmp_)
             tmp_.clear()
             with open('./backup/' + fileOld, 'r') as txtOLD:
@@ -463,7 +467,8 @@ def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=1):
                     stackN.difference_update(stackO) # проверяем оставшиеся записи
             stackO.clear()
             print('Proc:', np + 1, 'Sending delta to writer!')
-            stackQueue.put(stackN)
+            stackQueue.put(stackN.copy())
+            stackN.clear()
         # Оставшиеся строки обрабатывает последний процесс
         if np == procs:
             print('Proc:', np + 1, 'Last pass processing!')
@@ -475,7 +480,8 @@ def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=1):
                     if elem in stackO:
                         stackO.remove(elem)
             print('Proc:', np + 1, 'Sending delta to writer!')
-            stackQueue.put(stackO)                
+            stackQueue.put(stackO.copy())
+            stackO.clear()                
     print('Proc ended!:', np + 1)
     return
 
