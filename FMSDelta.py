@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------- #
 # GlowByte                                                          #
 # Автор: Гончаренко Дмитрий                                         #
-# Версия: v2.0                                                      #
+# Версия: v2.1                                                      #
 # ----------------------------------------------------------------- #
 
 import sys, time, bz2, os, argparse
@@ -23,16 +23,16 @@ pure_start = 0
 # Флаг завершения. По умолчанию очищает директорию от временных файлов и старых бэкапов.
 clean_finish = 1
 # Требуется ли загрузка в Кронос Синопсис
-kronos = 1
+cronos = 1
 # Формат файлов
 fformat = '.txt'
 # Вид бэкап файлов. Сейчас: list_of_expired_passports_date.txt, delta_date.txt
 postfix = datetime.today().strftime('%Y%m%d')  # _date.fformat
 # Выбор функции вычисления дельты. Стабильная - медленная, включать при больших дельта
 delta_method = 'flow'  # 'onepass' / 'stable' / 'flow'
-delta_type = 'plus'  # 'plus' / 'minus' / 'all' 
+delta_type = 'plus'  # 'plus' / 'minus' / 'all'
 # Количество используемой оперативной памяти. Связано с размером блока паспортов.
-ram_use = '2GB' # [MB|GB] exm: '2GB 700MB' 
+ram_use = '2GB'  # [MB|GB] exm: '2GB 700MB'
 # ОКАТО коды регионов
 # okato_codes = [1, 3, 4, 5, 7, 8, 11, 12, 14, 15, 17, 19, 20, 22, 24, 25, 26, 27, 28, 29, 32, 33, 34, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
 
@@ -48,12 +48,12 @@ def isInteger(s):
         return False
 
 
-# Размер блока чтения (в строках). Больше значение - Больше расход RAM    
-blocksize = 20 * 10 ** 6 # 1200MB
+# Размер блока чтения (в строках). Больше значение - Больше расход RAM
+blocksize = 20 * 10 ** 6  # 1200MB
 # Переводит RAM в размер блока в строках
 def toBlock(ram):
     global blocksize
-    mblock = 600 # 5m ~ 600MB
+    mblock = 600  # 5m ~ 600MB
     isGB = ram.find('GB')
     isMB = ram.find('MB')
     if isGB == isMB:
@@ -67,40 +67,40 @@ def toBlock(ram):
     sizeGB = 0
     sizeMB = 0
     if isGB != -1:
-        partGB,ram = ram.split('GB')
+        partGB, ram = ram.split('GB')
         sizeGB = int(partGB)
     if isMB != -1:
-        partMB,ram = ram.split('MB')
+        partMB, ram = ram.split('MB')
         sizeMB = int(partMB)
     size = sizeGB * 2**10 + sizeMB
     blocksize = int(size / mblock * (5 * 10 ** 6))
-    print('Blocksize computed: ' +  str(blocksize // 10**6) + 'm passports!') 
-    logging('Blocksize computed: ' +  str(blocksize // 10**6) + 'm passports!') 
+    print('Blocksize computed: ' + str(blocksize // 10**6) + 'm passports!')
+    logging('Blocksize computed: ' + str(blocksize // 10**6) + 'm passports!')
 
 
 # Конвертирует файл с номерами паспортов в формат для загрузки в Кронос
-def formatKronos(file, name):
-    print('Converting File to Kronos format')
-    logging('Converting File to Kronos format')
-    start_package = '++ ДД' # начало пакета
-    end_package = '++ ЯЯ' # конец пакета
-    start_message = '++ НН' # начало сообщения
-    end_message = '++ КК' # конец сообщения
-    div = '‡' # разделитель
-    mnemo_code = '++ МП' # мнемокод базы
+def formatCronos(file, name):
+    print('Converting File to Cronos format')
+    logging('Converting File to Cronos format')
+    start_package = '++ ДД'  # начало пакета
+    end_package = '++ ЯЯ'  # конец пакета
+    start_message = '++ НН'  # начало сообщения
+    end_message = '++ КК'  # конец сообщения
+    div = '‡'  # разделитель
+    mnemo_code = '++ МП'  # мнемокод базы
     # Начало строки
     start_ = start_package + div + start_message + div + mnemo_code + div
     # Конец строки
     _end = div + end_message + div + end_package + div
-    with open(file, 'r') as fd, open(name + postfix, 'w') as kron:
+    with open(file, 'r') as fd, open(name + postfix, 'w') as cron:
             print(file + ' converting to ' + name + postfix)
             logging(file + ' converting to ' + name + postfix)
             file_len = sum(1 for n in fd)
             fd.seek(0)
             for k, line in enumerate(fd):
-                kron.write(start_ + '01 ' + line[:4] + div + '02 ' + line[4:10] + _end)
+                cron.write(start_ + '01 ' + line[:4] + div + '02 ' + line[4:10] + _end)
                 if k < file_len - 1:
-                    kron.write('\n')
+                    cron.write('\n')
                 if k % 1000 == 0:
                     print(str(k * 100 // file_len) + '%', end='\r')
     print('Converted!')
@@ -175,7 +175,7 @@ def parseCSV(filename='list_of_expired_passports.csv'):
         print(pfilename, 'exists!', num, 'passports! Skipped!')
         logging(pfilename + ' exists! ' + str(num) + ' passports! Skipped!')
         return num, pfilename
-    
+
     with open(filename, 'r', encoding='utf8') as csvIN, \
             open(pfilename, 'w') as txtOUT, \
             open('brokenData.txt', 'w') as txtBroke:
@@ -203,9 +203,9 @@ def getBackFile(filename='list_of_expired_passports.csv'):
     print('Getting backup file to compare')
     logging('Getting backup file to compare')
     n = len(postfix) - 1
-    flen = len(fformat) 
+    flen = len(fformat)
     f = []
-    for root, dirs, files in os.walk('./backup'):
+    for _, _, files in os.walk('./backup'):
         f.extend(files)
         break
     if len(f) == 0:
@@ -276,7 +276,7 @@ def caclDeltaFlow(fileOld, fileNew, N):
                                 tmp_.remove(elemO)
                                 lineN = txtNEW.readline()
                                 n += 1
-                                if not lineN: 
+                                if not lineN:
                                     isEnded = True
                                     break
                                 tmp_.add(setFormat(lineN))
@@ -418,7 +418,7 @@ def calcDeltaOnePass(fileOld, fileNew, N):
     logging('Compared!')
 
 
-# --------------------------------------- Параллельная обработка --------------------------------------- # 
+# --------------------------------------- Параллельная обработка --------------------------------------- #
 
 
 # Функция прослушивающая очередь и записывающая дельту в файл
@@ -440,10 +440,10 @@ def writer(stackQueue, file):
 
 # Функция многопропоточного сравнения блоков для calcDeltaStable, отправляет данные в очередь
 def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=1):
-    block = round((N if N <= blocksize else blocksize) / procs) # число строк в одном блоке
-    blocks = ceil(N / block) # число блоков в файле 
-    p_blocks = round(blocks / procs) # число блоков в обработке у каждого процесса 
-    p_start = p_blocks * block * np # начало параллельного блока (строка)   
+    block = round((N if N <= blocksize else blocksize) / procs)  # число строк в одном блоке
+    blocks = ceil(N / block)  # число блоков в файле
+    p_blocks = round(blocks / procs)  # число блоков в обработке у каждого процесса
+    p_start = p_blocks * block * np  # начало параллельного блока (строка)
     print('Proc:', np + 1, 'Start from:', p_start)
     stackO = set()
     stackN = set()
@@ -464,7 +464,7 @@ def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=1):
                         stackO.clear()
                         if len(stackN) == 0: break
                 if len(stackN) > 0 and len(stackO) > 0:
-                    stackN.difference_update(stackO) # проверяем оставшиеся записи
+                    stackN.difference_update(stackO)  # проверяем оставшиеся записи
             stackO.clear()
             print('Proc:', np + 1, 'Sending delta to writer!')
             stackQueue.put(stackN.copy())
@@ -481,18 +481,18 @@ def delta_parallel(np, delta, file1, file2, stackQueue, N, blocksize, procs=1):
                         stackO.remove(elem)
             print('Proc:', np + 1, 'Sending delta to writer!')
             stackQueue.put(stackO.copy())
-            stackO.clear()                
+            stackO.clear()
     print('Proc ended!:', np + 1)
     return
 
-# ------------------------------------------------------------------------------------------------------ # 
+# ------------------------------------------------------------------------------------------------------ #
 
 # Вычисление дельты (дельта > 1гб) ~ 40 мин
 # fileOld - предыдущая версия
 # fileNew - новая версия
 # N - количество людей в новой базе
 def calcDeltaStable(fileOld, fileNew, N):
-    
+
     # Подготовка к параллельной обработке
     def compare_parallel(delta, file1, file2, procs=3):
         print('Parallel processing starts! Processes=', procs)
@@ -500,25 +500,25 @@ def calcDeltaStable(fileOld, fileNew, N):
         print('Main: Pool creating!')
         logging('Main: Pool creating!')
         # Настройка
-        pool = mp.Pool(processes=procs + 1) # 1 - writer. остальные - обработка
+        pool = mp.Pool(processes=procs + 1)  # 1 - writer. остальные - обработка
         manager = mp.Manager()
         queue = manager.Queue()
         # Подготовка аргументов для загрузки в delta_parallel
         compare_args = partial(delta_parallel, delta=delta, file1=file1, file2=file2, stackQueue=queue, N=N, blocksize=blocksize, procs=procs)
         # Создание процессов и обработка
-        w = pool.apply_async(writer, args=(queue, delta)) # процесс writer
+        w = pool.apply_async(writer, args=(queue, delta))  # процесс writer
         print('Main: Wait for processes finished!')
-        pool.map(compare_args, range(0, procs)) # procs процесса сравнения 
-        print('Main: sending \'exit\' to writer!')        
+        pool.map(compare_args, range(0, procs))  # procs процесса сравнения
+        print('Main: sending \'exit\' to writer!')
         queue.put('exit')
-        w.get() # ожидание завершения writer
+        w.get()  # ожидание завершения writer
         pool.close()
         print('Pool closed!')
 
     print('Delta Stable started!')
     logging('Delta Stable started!')
     print('Comparing:', fileOld, fileNew)
-    logging('Comparing: ' + fileOld + ' ' + fileNew)  
+    logging('Comparing: ' + fileOld + ' ' + fileNew)
     # Вычисление дельты с delta_type
     if delta_type == 'plus' or delta_type == 'all':
         compare_parallel('deltaPlus' + postfix, fileNew, './backup/' + fileOld)
@@ -564,8 +564,8 @@ def init():
         os.mkdir('./backup')
     if not os.path.isdir('./delta'):
         os.mkdir('./delta')
-    if not os.path.isdir('./kronos'):
-        os.mkdir('./kronos')
+    if not os.path.isdir('./cronos'):
+        os.mkdir('./cronos')
     if not os.path.isdir('./log'):
         os.mkdir('./log')
     if not os.path.exists('./log/log' + postfix):
@@ -581,11 +581,11 @@ def init():
     logging('Postfix style: ' + postfix, 1)
     logging('Clean finish: ' + ('yes' if clean_finish else 'no'), 1)
     logging('-----------------------------------', 1)
-    if not delta_method in ('stable', 'onepass', 'flow'):
+    if delta_method not in ('stable', 'onepass', 'flow'):
         print('delta_method error: \'stable\' or \'onepass\' or \'flow\' expected! Abort.')
         logging('delta_method error: \'stable\' or \'onepass\' or \'flow\' expected! Abort.')
         exit()
-    if not delta_type in ('plus', 'minus', 'all'):
+    if delta_type not in ('plus', 'minus', 'all'):
         print('delta_type error: \'plus\' or \'minus\' or \'all\' expected! Abort.')
         logging('delta_type error: \'plus\' or \'minus\' or \'all\' expected! Abort.')
         exit()
@@ -600,7 +600,7 @@ def init():
     print('Delta method:', delta_method)
     print('Delta type:', delta_type)
     # Перевод переменной оперативной памяти в размер блока чтения в строках
-    toBlock(ram_use)    
+    toBlock(ram_use)
 
 
 # Функция завершения. Перенос файлов и очистка директории
@@ -614,18 +614,18 @@ def postprocessing(parsed_file, first_backup, file='list_of_expired_passports.cs
             os.remove(dist + loc)
         if os.path.exists(loc):
             os.rename(loc, dist + loc)
-    
+
     # Переносим файлы в бэкап и дельту с заменой
     softmove(parsed_file, './backup/')
     softmove('deltaPlus' + postfix, './delta/')
     softmove('deltaMinus' + postfix, './delta/')
-    softmove('kronos_add' + postfix, './kronos/')
-    softmove('kronos_del' + postfix, './kronos/')
+    softmove('cronos_add' + postfix, './cronos/')
+    softmove('cronos_del' + postfix, './cronos/')
 
     if clean_finish:
         # Удаляем самый старый бэкап, если > 3
         f = []
-        for root, dirs, files in os.walk('./backup'):
+        for _, _, files in os.walk('./backup'):
             f.extend(files)
             break
         if len(f) > 3 and os.path.exists('./backup/' + first_backup):
@@ -661,13 +661,13 @@ def main():
         first_backup, backup_file = getBackFile(file)
         # Сравнение старой и новой версии баз, выделение дельты
         calcDelta(backup_file, parsed_file, num_passports)
-        # Конвертирование в формат Кроноса        
-        if kronos:
+        # Конвертирование в формат Кроноса
+        if cronos:
             # Если файлы существуют
             if delta_type == 'plus' or delta_type == 'all':
-                formatKronos('deltaPlus' + postfix, 'kronos_add')
+                formatCronos('deltaPlus' + postfix, 'cronos_add')
             if delta_type == 'minus' or delta_type == 'all':
-                formatKronos('deltaMinus' + postfix, 'kronos_del')
+                formatCronos('deltaMinus' + postfix, 'cronos_del')
 
     t1 = time.time()
     print('Parser ended!')
@@ -680,5 +680,5 @@ def main():
 
 
 if __name__ == '__main__':
-    mp.freeze_support() # фикс ошибки с pyinstaller и multiprocessing и argparser 
+    mp.freeze_support()  # фикс ошибки с pyinstaller и multiprocessing и argparser
     main()
