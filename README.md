@@ -1,4 +1,7 @@
 # FMS Delta
+
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/a082baceb1724552bdfeef1d6f6cffea)](https://app.codacy.com/app/dimargfd/FMSDelta?utm_source=github.com&utm_medium=referral&utm_content=SoleSensei/FMSDelta&utm_campaign=Badge_Grade_Dashboard)
+
 Скрипт скачивает реестр недействительных паспортов с ФМС МВД и вычисляет новые добавленные и удаленные паспорта
 
 Задача выполнена в рамках проекта __GlowByte__
