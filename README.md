@@ -1,6 +1,6 @@
 # FMS Delta
 
-[![CodeFactor](https://www.codefactor.io/repository/github/solesensei/fmsdelta/badge)](https://www.codefactor.io/repository/github/solesensei/fmsdelta) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/6e066444442b4ee8b2bfb8a14273dc1b)](https://www.codacy.com/app/dimargfd/FMSDelta?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=SoleSensei/FMSDelta&amp;utm_campaign=Badge_Grade)
+[![CodeFactor](https://www.codefactor.io/repository/github/solesensei/fmsdelta/badge)](https://www.codefactor.io/repository/github/solesensei/fmsdelta) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) <a href="https://www.buymeacoffee.com/solesensei"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" height="20px"></a>
 
 Скрипт скачивает реестр недействительных паспортов с ФМС МВД и вычисляет новые добавленные и удаленные паспорта
 
